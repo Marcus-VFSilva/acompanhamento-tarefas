@@ -8,9 +8,13 @@ export interface Note {
   tarefaId?: string;
   tarefaTitulo?: string;
   data: string;
+  recorrencia?: "semanal" | null;
+  diasSemana?: number[];  // 0=Dom 1=Seg 2=Ter 3=Qua 4=Qui 5=Sex 6=Sáb
   createdAt: string;
   updatedAt: string;
 }
+
+export const DIAS_SEMANA = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"] as const;
 
 export const NOTE_TYPE_LABEL: Record<NoteType, string> = {
   reuniao: "Reunião",

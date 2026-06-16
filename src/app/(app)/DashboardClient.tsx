@@ -1,20 +1,41 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useTasksQuery } from "@/hooks/useTasks";
 import { useNotasQuery, useCreateNota, useUpdateNota, useDeleteNota } from "@/hooks/useNotas";
 import { useSistemasQuery } from "@/hooks/useSistemas";
 import DashboardCharts from "@/components/dashboard/DashboardCharts";
 import {
   CheckCircle2, Clock, ListTodo, AlertCircle, TrendingUp, Loader2,
-  Plus, X, Save, Server, Trash2, Pencil,
+  Plus, X, Save, Server, Trash2, Pencil, ChevronDown, ChevronUp,
+  Bell, CalendarDays, BookOpen,
 } from "lucide-react";
 import Link from "next/link";
 import type { Note, NoteType } from "@/types/note";
-import { NOTE_TYPE_LABEL, NOTE_TYPE_COLOR } from "@/types/note";
+import { NOTE_TYPE_LABEL, NOTE_TYPE_COLOR, DIAS_SEMANA } from "@/types/note";
 
 interface Props { isAdmin: boolean; userEmail: string; }
 
+// ── Helpers ───────────────────────────────────────────────────────────
+function getTodayStr() {
+  return new Date().toISOString().split("T")[0];
+}
+function getTodayDow() {
+  return new Date().getDay();
+}
+
+function isNotaToday(nota: Note, todayStr: string, todayDow: number): boolean {
+  if (nota.data === todayStr) return true;
+  if (nota.recorrencia === "semanal" && nota.diasSemana?.includes(todayDow)) return true;
+  return false;
+}
+
+function recorrenciaLabel(nota: Note): string {
+  if (nota.recorrencia !== "semanal" || !nota.diasSemana?.length) return "";
+  return "Toda " + nota.diasSemana.map((d) => DIAS_SEMANA[d]).join(", ");
+}
+
+// ── Metric card ───────────────────────────────────────────────────────
 function MetricCard({ label, value, icon: Icon, color, sub }: {
   label: string; value: number; icon: React.ElementType; color: string; sub?: string;
 }) {
@@ -45,6 +66,80 @@ const PRIORITY_COLOR: Record<string, string> = {
   alta: "text-red-500", media: "text-amber-500", baixa: "text-surface-400",
 };
 
+// ── Agenda do Dia ─────────────────────────────────────────────────────
+function AgendaHoje({
+  notas,
+  onEdit,
+}: {
+  notas: Note[];
+  onEdit: (nota: Note) => void;
+}) {
+  const lembretes = notas.filter((n) => n.tipo === "lembrete");
+  const reunioes = notas.filter((n) => n.tipo === "reuniao");
+  const outros = notas.filter((n) => n.tipo === "anotacao");
+
+  return (
+    <div className="bg-white rounded-xl border border-surface-200 overflow-hidden">
+      <div className="flex items-center gap-2 px-4 py-3 border-b border-surface-100 bg-gradient-to-r from-surface-50 to-white">
+        <CalendarDays size={14} className="text-brand-600 shrink-0" />
+        <span className="text-[12px] font-bold text-surface-700 uppercase tracking-wider">Agenda de hoje</span>
+        <span className="text-[11px] text-surface-400 ml-auto">
+          {new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long" })}
+        </span>
+      </div>
+
+      <div className="px-4 py-3 flex flex-wrap gap-2">
+        {notas.length === 0 && (
+          <p className="text-[12px] text-surface-400 italic py-1">✓ Nenhum compromisso para hoje</p>
+        )}
+
+        {lembretes.map((n) => (
+          <button
+            key={n.id}
+            onClick={() => onEdit(n)}
+            className="group flex items-start gap-2 px-3 py-2 rounded-lg bg-purple-50 border border-purple-200 hover:border-purple-400 hover:shadow-sm transition-all text-left"
+          >
+            <Bell size={13} className="text-purple-500 mt-0.5 shrink-0 group-hover:animate-bounce" />
+            <div>
+              <p className="text-[12px] font-semibold text-purple-800 leading-tight">{n.titulo}</p>
+              {recorrenciaLabel(n) && (
+                <p className="text-[10px] text-purple-500 mt-0.5">{recorrenciaLabel(n)}</p>
+              )}
+            </div>
+          </button>
+        ))}
+
+        {reunioes.map((n) => (
+          <button
+            key={n.id}
+            onClick={() => onEdit(n)}
+            className="flex items-start gap-2 px-3 py-2 rounded-lg bg-blue-50 border border-blue-200 hover:border-blue-400 hover:shadow-sm transition-all text-left"
+          >
+            <CalendarDays size={13} className="text-blue-500 mt-0.5 shrink-0" />
+            <div>
+              <p className="text-[12px] font-semibold text-blue-800 leading-tight">{n.titulo}</p>
+              {n.tarefaTitulo && (
+                <p className="text-[10px] text-blue-400 mt-0.5">↗ {n.tarefaTitulo}</p>
+              )}
+            </div>
+          </button>
+        ))}
+
+        {outros.map((n) => (
+          <button
+            key={n.id}
+            onClick={() => onEdit(n)}
+            className="flex items-start gap-2 px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 hover:border-amber-400 hover:shadow-sm transition-all text-left"
+          >
+            <BookOpen size={13} className="text-amber-500 mt-0.5 shrink-0" />
+            <p className="text-[12px] font-semibold text-amber-800 leading-tight">{n.titulo}</p>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ── Note Drawer ───────────────────────────────────────────────────────
 function NotaDrawer({
   nota,
@@ -64,8 +159,16 @@ function NotaDrawer({
   const [tipo, setTipo] = useState<NoteType>(nota?.tipo ?? "anotacao");
   const [tarefaId, setTarefaId] = useState(nota?.tarefaId ?? "");
   const [data, setData] = useState(nota?.data ?? new Date().toISOString().split("T")[0]);
+  const [recorrencia, setRecorrencia] = useState<"semanal" | null>(nota?.recorrencia ?? null);
+  const [diasSemana, setDiasSemana] = useState<number[]>(nota?.diasSemana ?? []);
 
   const isBusy = create.isPending || update.isPending;
+
+  function toggleDia(i: number) {
+    setDiasSemana((prev) =>
+      prev.includes(i) ? prev.filter((x) => x !== i) : [...prev, i].sort()
+    );
+  }
 
   async function handleSave() {
     if (!titulo.trim()) return;
@@ -77,6 +180,8 @@ function NotaDrawer({
       tarefaId: tarefaId || undefined,
       tarefaTitulo: linkedTask?.title || undefined,
       data,
+      recorrencia: tipo === "lembrete" ? recorrencia : null,
+      diasSemana: tipo === "lembrete" && recorrencia === "semanal" ? diasSemana : [],
     };
     if (isEditing) {
       await update.mutateAsync({ id: nota!.id, updates: payload });
@@ -91,7 +196,7 @@ function NotaDrawer({
       <div className="fixed inset-0 z-40 bg-black/20" onClick={onClose} />
       <div className="fixed right-0 top-0 bottom-0 z-50 w-[400px] max-w-[95vw] bg-white shadow-xl flex flex-col">
         <div className="flex items-center justify-between px-5 py-4 border-b border-surface-200">
-          <h2 className="text-sm font-bold text-surface-900">{isEditing ? "Editar anotação" : "Nova anotação"}</h2>
+          <h2 className="text-sm font-bold text-surface-900">{isEditing ? "Editar" : "Nova anotação"}</h2>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-surface-100 text-surface-400"><X size={16} /></button>
         </div>
 
@@ -121,14 +226,20 @@ function NotaDrawer({
               type="text"
               value={titulo}
               onChange={(e) => setTitulo(e.target.value)}
-              placeholder="ex: Reunião com Jackson — Zendesk"
+              placeholder={
+                tipo === "lembrete" ? "ex: Envio de relatório gerencial" :
+                tipo === "reuniao"  ? "ex: Reunião com Jackson — Zendesk" :
+                "ex: Decisões sobre o projeto X"
+              }
               className="w-full px-3 py-2 text-sm border border-surface-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500"
             />
           </div>
 
           {/* Data */}
           <div>
-            <label className="block text-[12px] font-medium text-surface-700 mb-1">Data</label>
+            <label className="block text-[12px] font-medium text-surface-700 mb-1">
+              {tipo === "lembrete" && recorrencia === "semanal" ? "Data de início" : "Data"}
+            </label>
             <input
               type="date"
               value={data}
@@ -137,14 +248,75 @@ function NotaDrawer({
             />
           </div>
 
+          {/* Recorrência — só para lembrete */}
+          {tipo === "lembrete" && (
+            <div>
+              <label className="block text-[12px] font-medium text-surface-700 mb-2">Recorrência</label>
+              <div className="flex gap-2 mb-3">
+                <button
+                  onClick={() => { setRecorrencia(null); setDiasSemana([]); }}
+                  className={`px-3 py-1.5 rounded-lg text-[12px] font-medium border transition-all ${
+                    !recorrencia
+                      ? "bg-surface-900 text-white border-surface-900"
+                      : "bg-surface-50 text-surface-500 border-surface-200 hover:border-surface-400"
+                  }`}
+                >
+                  Não repete
+                </button>
+                <button
+                  onClick={() => setRecorrencia("semanal")}
+                  className={`px-3 py-1.5 rounded-lg text-[12px] font-medium border transition-all ${
+                    recorrencia === "semanal"
+                      ? "bg-purple-500 text-white border-purple-500"
+                      : "bg-surface-50 text-surface-500 border-surface-200 hover:border-purple-300"
+                  }`}
+                >
+                  🔁 Semanal
+                </button>
+              </div>
+
+              {recorrencia === "semanal" && (
+                <div>
+                  <p className="text-[11px] text-surface-400 mb-2">Dias da semana</p>
+                  <div className="flex gap-1.5">
+                    {DIAS_SEMANA.map((d, i) => (
+                      <button
+                        key={i}
+                        onClick={() => toggleDia(i)}
+                        className={`w-9 h-9 rounded-full text-[11px] font-bold border transition-all ${
+                          diasSemana.includes(i)
+                            ? "bg-purple-500 text-white border-purple-500 shadow-sm"
+                            : "bg-surface-50 text-surface-400 border-surface-200 hover:border-purple-300 hover:text-purple-500"
+                        }`}
+                      >
+                        {d}
+                      </button>
+                    ))}
+                  </div>
+                  {diasSemana.length > 0 && (
+                    <p className="text-[11px] text-purple-600 mt-1.5 font-medium">
+                      Toda {diasSemana.map((d) => DIAS_SEMANA[d]).join(", ")}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Conteúdo */}
           <div>
-            <label className="block text-[12px] font-medium text-surface-700 mb-1">Conteúdo</label>
+            <label className="block text-[12px] font-medium text-surface-700 mb-1">
+              {tipo === "lembrete" ? "Detalhe (opcional)" : "Conteúdo"}
+            </label>
             <textarea
               value={conteudo}
               onChange={(e) => setConteudo(e.target.value)}
-              rows={5}
-              placeholder="Detalhes, decisões, próximas ações..."
+              rows={4}
+              placeholder={
+                tipo === "lembrete" ? "Contexto, destinatários, link..." :
+                tipo === "reuniao"  ? "Decisões, próximas ações, participantes..." :
+                "Detalhes, referências..."
+              }
               className="w-full px-3 py-2 text-sm border border-surface-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 resize-none"
             />
           </div>
@@ -189,6 +361,10 @@ export default function DashboardClient({ isAdmin, userEmail }: Props) {
   const deleteNota = useDeleteNota();
 
   const [notaDrawer, setNotaDrawer] = useState<Note | null | "new">(null);
+  const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
+
+  const todayStr = getTodayStr();
+  const todayDow = getTodayDow();
 
   const visibleTasks = isAdmin ? allTasks : allTasks.filter((t) => t.assignedTo === userEmail);
 
@@ -202,9 +378,47 @@ export default function DashboardClient({ isAdmin, userEmail }: Props) {
 
   const recentTasks = [...visibleTasks]
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-    .slice(0, 5);
+    .slice(0, 6);
 
-  const recentNotas = notas.slice(0, 4);
+  // Notas de hoje (lembretes recorrentes + data exata)
+  const notasHoje = useMemo(
+    () => notas
+      .filter((n) => isNotaToday(n, todayStr, todayDow))
+      .sort((a, b) => {
+        const ORDER: Record<NoteType, number> = { lembrete: 0, reuniao: 1, anotacao: 2 };
+        return ORDER[a.tipo] - ORDER[b.tipo];
+      }),
+    [notas, todayStr, todayDow]
+  );
+
+  // Mapa taskId → notas vinculadas
+  const notasByTask = useMemo(() => {
+    const m: Record<string, Note[]> = {};
+    for (const n of notas) {
+      if (n.tarefaId) {
+        if (!m[n.tarefaId]) m[n.tarefaId] = [];
+        m[n.tarefaId].push(n);
+      }
+    }
+    return m;
+  }, [notas]);
+
+  // Notas ordenadas para o painel lateral:
+  // 1. Hoje (lembretes recorrentes ou data=hoje)
+  // 2. Lembretes futuros (por data asc)
+  // 3. Resto recente (data desc)
+  const sortedNotas = useMemo(() => {
+    const hoje = notas.filter((n) => isNotaToday(n, todayStr, todayDow));
+    const futuros = notas
+      .filter((n) => !isNotaToday(n, todayStr, todayDow) && n.tipo === "lembrete" && n.data > todayStr)
+      .sort((a, b) => a.data.localeCompare(b.data));
+    const resto = notas
+      .filter((n) => !isNotaToday(n, todayStr, todayDow) && !(n.tipo === "lembrete" && n.data > todayStr))
+      .sort((a, b) => b.data.localeCompare(a.data) || b.createdAt.localeCompare(a.createdAt));
+    return [...hoje, ...futuros, ...resto];
+  }, [notas, todayStr, todayDow]);
+
+  const visibleNotas = sortedNotas.slice(0, 6);
 
   const sistemaStats = {
     total: sistemas.length,
@@ -228,6 +442,9 @@ export default function DashboardClient({ isAdmin, userEmail }: Props) {
           {new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
         </p>
       </div>
+
+      {/* Agenda do dia — sempre visível (mostra "dia livre" se vazio) */}
+      <AgendaHoje notas={notasHoje} onEdit={(n) => setNotaDrawer(n)} />
 
       {/* Task KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
@@ -283,7 +500,8 @@ export default function DashboardClient({ isAdmin, userEmail }: Props) {
 
       {/* Two-column: recent tasks + notes */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Recent tasks */}
+
+        {/* Recent tasks — with linked-note count */}
         <div className="bg-white rounded-xl border border-surface-200">
           <div className="flex items-center justify-between px-5 py-4 border-b border-surface-100">
             <h3 className="text-sm font-semibold text-surface-700">Atividade recente</h3>
@@ -293,30 +511,86 @@ export default function DashboardClient({ isAdmin, userEmail }: Props) {
             {recentTasks.length === 0 ? (
               <p className="px-5 py-8 text-center text-sm text-surface-400">Nenhuma tarefa ainda</p>
             ) : (
-              recentTasks.map((task) => (
-                <div key={task.id} className="px-5 py-3.5 flex items-center gap-3">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-surface-800 truncate">{task.title}</p>
-                    <p className="text-xs text-surface-400 mt-0.5">Atualizado {task.updatedAt}</p>
+              recentTasks.map((task) => {
+                const taskNotas = notasByTask[task.id] ?? [];
+                const isExpanded = expandedTaskId === task.id;
+                return (
+                  <div key={task.id}>
+                    <div className="px-5 py-3.5 flex items-center gap-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-surface-800 truncate">{task.title}</p>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <p className="text-xs text-surface-400">Atualizado {task.updatedAt}</p>
+                          {taskNotas.length > 0 && (
+                            <button
+                              onClick={() => setExpandedTaskId(isExpanded ? null : task.id)}
+                              className="inline-flex items-center gap-1 text-[10px] font-medium text-brand-600 bg-brand-50 px-1.5 py-0.5 rounded hover:bg-brand-100 transition-colors"
+                            >
+                              📝 {taskNotas.length} {taskNotas.length === 1 ? "nota" : "notas"}
+                              {isExpanded ? <ChevronUp size={9} /> : <ChevronDown size={9} />}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className={`text-[10px] font-semibold uppercase px-2 py-0.5 rounded-full ${PRIORITY_COLOR[task.priority]}`}>
+                          {task.priority}
+                        </span>
+                        <span className={`text-[11px] font-medium px-2.5 py-1 rounded-full ${STATUS_COLOR[task.status]}`}>
+                          {STATUS_LABEL[task.status]}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Notas vinculadas inline */}
+                    {isExpanded && taskNotas.length > 0 && (
+                      <div className="px-5 pb-3 space-y-1.5 bg-surface-50/70 border-t border-surface-100">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-surface-400 pt-2">Notas vinculadas</p>
+                        {taskNotas.map((n) => {
+                          const c = NOTE_TYPE_COLOR[n.tipo];
+                          const isHoje = isNotaToday(n, todayStr, todayDow);
+                          return (
+                            <button
+                              key={n.id}
+                              onClick={() => setNotaDrawer(n)}
+                              className="w-full text-left flex items-start gap-2 px-2.5 py-2 rounded-lg hover:bg-surface-100 transition-colors group"
+                            >
+                              <span className="text-sm shrink-0">{c.icon}</span>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-1.5">
+                                  <p className="text-[12px] font-semibold text-surface-800 truncate">{n.titulo}</p>
+                                  {isHoje && (
+                                    <span className="text-[9px] font-bold bg-purple-100 text-purple-600 px-1 py-0.5 rounded shrink-0">HOJE</span>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-2 mt-0.5">
+                                  <span className={`text-[10px] px-1 py-0.5 rounded ${c.bg} ${c.text}`}>{NOTE_TYPE_LABEL[n.tipo]}</span>
+                                  <span className="text-[10px] text-surface-400">{n.data}</span>
+                                  {n.recorrencia === "semanal" && n.diasSemana?.length ? (
+                                    <span className="text-[10px] text-purple-500">🔁 Toda {n.diasSemana.map((d) => DIAS_SEMANA[d]).join(", ")}</span>
+                                  ) : null}
+                                </div>
+                                {n.conteudo && (
+                                  <p className="text-[11px] text-surface-500 mt-0.5 line-clamp-1">{n.conteudo}</p>
+                                )}
+                              </div>
+                              <Pencil size={11} className="shrink-0 text-surface-300 group-hover:text-surface-500 mt-1" />
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className={`text-[10px] font-semibold uppercase px-2 py-0.5 rounded-full ${PRIORITY_COLOR[task.priority]}`}>
-                      {task.priority}
-                    </span>
-                    <span className={`text-[11px] font-medium px-2.5 py-1 rounded-full ${STATUS_COLOR[task.status]}`}>
-                      {STATUS_LABEL[task.status]}
-                    </span>
-                  </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>
 
-        {/* Notes */}
+        {/* Notes column — ordenadas */}
         <div className="bg-white rounded-xl border border-surface-200">
           <div className="flex items-center justify-between px-5 py-4 border-b border-surface-100">
-            <h3 className="text-sm font-semibold text-surface-700">Anotações recentes</h3>
+            <h3 className="text-sm font-semibold text-surface-700">Anotações</h3>
             <button
               onClick={() => setNotaDrawer("new")}
               className="inline-flex items-center gap-1 text-xs text-brand-500 hover:text-brand-600 font-medium"
@@ -325,8 +599,9 @@ export default function DashboardClient({ isAdmin, userEmail }: Props) {
               Nova
             </button>
           </div>
+
           <div className="divide-y divide-surface-50">
-            {recentNotas.length === 0 ? (
+            {visibleNotas.length === 0 ? (
               <div className="px-5 py-8 text-center">
                 <p className="text-sm text-surface-400 mb-3">Nenhuma anotação ainda</p>
                 <button
@@ -337,18 +612,34 @@ export default function DashboardClient({ isAdmin, userEmail }: Props) {
                 </button>
               </div>
             ) : (
-              recentNotas.map((nota) => {
+              visibleNotas.map((nota) => {
                 const c = NOTE_TYPE_COLOR[nota.tipo];
+                const isHoje = isNotaToday(nota, todayStr, todayDow);
+                const isFuturo = nota.tipo === "lembrete" && nota.data > todayStr && !isHoje;
+                const recLabel = recorrenciaLabel(nota);
+
                 return (
-                  <div key={nota.id} className="px-5 py-3.5 flex items-start gap-3 group">
+                  <div key={nota.id} className={`px-5 py-3.5 flex items-start gap-3 group transition-colors ${isHoje ? "bg-purple-50/30" : ""}`}>
                     <span className="text-base shrink-0 mt-0.5">{c.icon}</span>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-surface-800 truncate">{nota.titulo}</p>
-                      <div className="flex items-center gap-2 mt-0.5">
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-sm font-medium text-surface-800 truncate">{nota.titulo}</p>
+                        {isHoje && (
+                          <span className="text-[9px] font-bold bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded-full shrink-0">HOJE</span>
+                        )}
+                        {isFuturo && (
+                          <span className="text-[9px] font-bold bg-amber-100 text-amber-600 px-1.5 py-0.5 rounded-full shrink-0">EM BREVE</span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                         <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${c.bg} ${c.text}`}>
                           {NOTE_TYPE_LABEL[nota.tipo]}
                         </span>
-                        <span className="text-[11px] text-surface-400">{nota.data}</span>
+                        {recLabel ? (
+                          <span className="text-[10px] text-purple-500 font-medium">🔁 {recLabel}</span>
+                        ) : (
+                          <span className="text-[11px] text-surface-400">{nota.data}</span>
+                        )}
                         {nota.tarefaTitulo && (
                           <span className="text-[10px] text-brand-500 truncate max-w-[100px]">↗ {nota.tarefaTitulo}</span>
                         )}
@@ -372,9 +663,9 @@ export default function DashboardClient({ isAdmin, userEmail }: Props) {
                 );
               })
             )}
-            {notas.length > 4 && (
+            {sortedNotas.length > 6 && (
               <div className="px-5 py-3 text-center">
-                <span className="text-xs text-surface-400">{notas.length - 4} anotações mais antigas</span>
+                <span className="text-xs text-surface-400">{sortedNotas.length - 6} anotações mais antigas</span>
               </div>
             )}
           </div>
