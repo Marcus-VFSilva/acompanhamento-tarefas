@@ -1,14 +1,17 @@
 "use client";
 
 import { useTasksQuery } from "@/hooks/useTasks";
+import { useSistemasQuery } from "@/hooks/useSistemas";
 import {
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip,
   ResponsiveContainer, Legend, CartesianGrid,
 } from "recharts";
-import { Download, CheckCircle2, Clock, ListTodo, AlertCircle, XCircle, Timer } from "lucide-react";
+import { Download, CheckCircle2, Clock, ListTodo, AlertCircle, XCircle, Timer, Server } from "lucide-react";
 import { exportToExcel } from "@/lib/exportExcel";
 import type { Task } from "@/types";
 import { StatusBadge, PriorityBadge } from "@/components/tasks/StatusBadge";
+import { STATUS_SISTEMA } from "@/types/system";
+import Link from "next/link";
 
 interface Props { isAdmin: boolean; userEmail: string; }
 
@@ -41,18 +44,6 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
   return <h2 className="text-sm font-bold text-surface-700">{children}</h2>;
 }
 
-function buildUserData(tasks: Task[]) {
-  const map = new Map<string, { name: string; pendente: number; em_andamento: number; concluido: number; cancelado: number }>();
-  tasks.forEach((t) => {
-    if (!map.has(t.assignedTo)) {
-      map.set(t.assignedTo, { name: t.assignedToName.split(" ")[0], pendente: 0, em_andamento: 0, concluido: 0, cancelado: 0 });
-    }
-    const u = map.get(t.assignedTo)!;
-    u[t.status]++;
-  });
-  return Array.from(map.values());
-}
-
 function buildProjectData(tasks: Task[]) {
   const map = new Map<string, { pendente: number; em_andamento: number; concluido: number }>();
   tasks.forEach((t) => {
@@ -66,6 +57,7 @@ function buildProjectData(tasks: Task[]) {
 
 export default function RelatoriosClient({ isAdmin, userEmail }: Props) {
   const { data: allTasks = [] } = useTasksQuery();
+  const { data: sistemas = [] } = useSistemasQuery();
   const tasks = isAdmin ? allTasks : allTasks.filter((t) => t.assignedTo === userEmail);
 
   const total = tasks.length;
@@ -85,8 +77,13 @@ export default function RelatoriosClient({ isAdmin, userEmail }: Props) {
     { name: "Cancelado", value: cancelado, color: STATUS_COLORS.cancelado },
   ].filter((d) => d.value > 0);
 
-  const userData = buildUserData(tasks);
   const projectData = buildProjectData(tasks);
+
+  const sistemaStatusData = Object.entries(STATUS_SISTEMA).map(([key, val]) => ({
+    name: val.label,
+    value: sistemas.filter((s) => s.status === key).length,
+    color: val.color,
+  })).filter((d) => d.value > 0);
 
   const tempoData = tasks
     .filter((t) => t.tempoEstimado || t.tempoPrevisto)
@@ -104,7 +101,7 @@ export default function RelatoriosClient({ isAdmin, userEmail }: Props) {
         <div>
           <h1 className="text-xl font-bold text-surface-900">Relatórios</h1>
           <p className="text-sm text-surface-400 mt-0.5">
-            {isAdmin ? "Visão consolidada de todos os colaboradores" : "Seus indicadores de desempenho"}
+            {"Seus indicadores de desempenho"}
             {" · "}gerado em {new Date().toLocaleDateString("pt-BR")}
           </p>
         </div>
@@ -145,30 +142,12 @@ export default function RelatoriosClient({ isAdmin, userEmail }: Props) {
         </div>
 
         <div className="bg-white rounded-xl border border-surface-200 p-5">
-          <SectionTitle>Tarefas por colaborador</SectionTitle>
-          <ResponsiveContainer width="100%" height={220} className="mt-3">
-            <BarChart data={userData} barSize={14}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-              <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
-              <Tooltip />
-              <Bar dataKey="pendente" name="Pendente" fill="#94a3b8" stackId="a" />
-              <Bar dataKey="em_andamento" name="Em andamento" fill="#3b82f6" stackId="a" />
-              <Bar dataKey="concluido" name="Concluído" fill="#044a42" stackId="a" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      {/* Charts row 2 */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="bg-white rounded-xl border border-surface-200 p-5">
           <SectionTitle>Tarefas por projeto</SectionTitle>
           <ResponsiveContainer width="100%" height={220} className="mt-3">
             <BarChart data={projectData} layout="vertical" barSize={12}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
               <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
-              <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={100} />
+              <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={110} />
               <Tooltip />
               <Bar dataKey="pendente" name="Pendente" fill="#94a3b8" stackId="a" />
               <Bar dataKey="em_andamento" name="Em andamento" fill="#3b82f6" stackId="a" />
@@ -176,7 +155,10 @@ export default function RelatoriosClient({ isAdmin, userEmail }: Props) {
             </BarChart>
           </ResponsiveContainer>
         </div>
+      </div>
 
+      {/* Charts row 2 */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="bg-white rounded-xl border border-surface-200 p-5">
           <SectionTitle>Tempo estimado vs. previsto (h)</SectionTitle>
           <ResponsiveContainer width="100%" height={220} className="mt-3">
@@ -191,6 +173,35 @@ export default function RelatoriosClient({ isAdmin, userEmail }: Props) {
             </BarChart>
           </ResponsiveContainer>
         </div>
+
+        {/* Sistemas por status */}
+        {sistemas.length > 0 && (
+          <div className="bg-white rounded-xl border border-surface-200 p-5">
+            <div className="flex items-center justify-between mb-3">
+              <SectionTitle>Sistemas por status</SectionTitle>
+              <Link href="/monitoramento" className="text-xs text-brand-500 font-medium hover:text-brand-600">
+                Ver mapa →
+              </Link>
+            </div>
+            <ResponsiveContainer width="100%" height={190} className="mt-3">
+              <PieChart>
+                <Pie data={sistemaStatusData} cx="50%" cy="50%" innerRadius={45} outerRadius={75} paddingAngle={3} dataKey="value">
+                  {sistemaStatusData.map((e, i) => <Cell key={i} fill={e.color} />)}
+                </Pie>
+                <Tooltip formatter={(v) => [`${v} sistema(s)`, ""]} />
+                <Legend iconType="circle" iconSize={8} />
+              </PieChart>
+            </ResponsiveContainer>
+            <div className="grid grid-cols-3 gap-2 mt-2">
+              {sistemaStatusData.map((d) => (
+                <div key={d.name} className="text-center">
+                  <p className="text-base font-bold" style={{ color: d.color }}>{d.value}</p>
+                  <p className="text-[9px] text-surface-400 leading-tight">{d.name}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Detailed table */}
