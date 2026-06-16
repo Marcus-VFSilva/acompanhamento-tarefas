@@ -1,61 +1,164 @@
 "use client";
 
-import { Edit3, Trash2, AlertTriangle } from "lucide-react";
-import type { Task } from "@/types";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { Trash2, AlertTriangle, MessageSquare } from "lucide-react";
+import type { Task, TaskStatus, TaskPriority } from "@/types";
 import { StatusBadge, PriorityBadge } from "./StatusBadge";
-import { useDeleteTask } from "@/hooks/useTasks";
+import { useDeleteTask, useUpdateTask } from "@/hooks/useTasks";
+import { useNotasQuery } from "@/hooks/useNotas";
 
-interface Props {
-  tasks: Task[];
-  onEdit: (task: Task) => void;
-  canDeleteFn: (task: Task) => boolean;
-}
+// ── Inline dropdown helpers ───────────────────────────────────────────
+const STATUS_OPTIONS: { value: TaskStatus; label: string }[] = [
+  { value: "pendente",     label: "Pendente"     },
+  { value: "em_andamento", label: "Em andamento" },
+  { value: "concluido",    label: "Concluído"    },
+  { value: "cancelado",    label: "Cancelado"    },
+];
+const PRIORITY_OPTIONS: { value: TaskPriority; label: string }[] = [
+  { value: "alta",  label: "Alta"  },
+  { value: "media", label: "Média" },
+  { value: "baixa", label: "Baixa" },
+];
 
-function Cell({ children, className = "" }: { children?: React.ReactNode; className?: string }) {
+function InlinePill<T extends string>({
+  value, options, onChange, renderLabel,
+}: {
+  value: T;
+  options: { value: T; label: string }[];
+  onChange: (v: T) => void;
+  renderLabel: () => React.ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function down(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", down);
+    return () => document.removeEventListener("mousedown", down);
+  }, [open]);
+
   return (
-    <td className={`px-3 py-2.5 text-xs text-surface-700 align-top border-b border-surface-100 ${className}`}>
-      {children}
-    </td>
+    <div ref={ref} className="relative inline-block" onClick={(e) => e.stopPropagation()}>
+      <button
+        onClick={() => setOpen(!open)}
+        className="rounded-full focus:outline-none hover:ring-2 hover:ring-brand-300/60 transition-all"
+        title="Clique para alterar"
+      >
+        {renderLabel()}
+      </button>
+      {open && (
+        <div className="absolute top-full left-0 mt-1 z-30 bg-white border border-surface-200 rounded-xl shadow-lg py-1 min-w-[148px]">
+          {options.map((o) => (
+            <button
+              key={o.value}
+              onClick={() => { onChange(o.value); setOpen(false); }}
+              className={`w-full text-left px-3 py-1.5 text-xs hover:bg-surface-50 flex items-center justify-between transition-colors ${
+                value === o.value ? "text-brand-600 font-semibold" : "text-surface-700"
+              }`}
+            >
+              {o.label}
+              {value === o.value && <span className="text-brand-500 text-[10px]">✓</span>}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
-function Truncated({ text, maxLen = 60, className = "" }: { text?: string; maxLen?: number; className?: string }) {
-  if (!text) return <span className="text-surface-300">—</span>;
+// ── Inline text cell (situação atual) ─────────────────────────────────
+function InlineTextCell({
+  value, onSave, maxLen = 60,
+}: {
+  value?: string; onSave: (v: string) => void; maxLen?: number;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [local, setLocal] = useState(value ?? "");
+  const ref = useRef<HTMLTextAreaElement>(null);
+
+  function start(e: React.MouseEvent) {
+    e.stopPropagation();
+    setLocal(value ?? "");
+    setEditing(true);
+  }
+
+  useEffect(() => {
+    if (editing) ref.current?.focus();
+  }, [editing]);
+
+  function commit() {
+    setEditing(false);
+    if (local !== (value ?? "")) onSave(local);
+  }
+
+  if (editing) {
+    return (
+      <textarea
+        ref={ref}
+        value={local}
+        onChange={(e) => setLocal(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => { if (e.key === "Escape") { setEditing(false); } if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); commit(); } }}
+        rows={2}
+        className="w-full text-xs border border-brand-400 rounded-md px-2 py-1 resize-none focus:outline-none focus:ring-2 focus:ring-brand-500/30 bg-white shadow-sm"
+        style={{ minWidth: 180 }}
+        onClick={(e) => e.stopPropagation()}
+      />
+    );
+  }
+
+  const text = value?.trim();
   return (
-    <span title={text} className={`${className}`}>
-      {text.length > maxLen ? text.slice(0, maxLen) + "…" : text}
+    <span
+      onClick={start}
+      title={text ? text : "Clique para adicionar situação atual"}
+      className={`block cursor-text hover:bg-surface-100 rounded px-1 py-0.5 -mx-1 transition-colors ${text ? "text-surface-600" : "text-surface-300 italic text-[11px]"}`}
+    >
+      {text ? (text.length > maxLen ? text.slice(0, maxLen) + "…" : text) : "— clique para editar"}
     </span>
   );
 }
 
-function HourCell({ value }: { value?: number }) {
-  if (value == null) return <span className="text-surface-300">—</span>;
-  return <span>{value}h</span>;
+// ── Main table ────────────────────────────────────────────────────────
+interface Props {
+  tasks: Task[];
+  selectedTaskId: string | null;
+  onSelect: (task: Task) => void;
+  canDeleteFn: (task: Task) => boolean;
 }
 
-export default function TaskTable({ tasks, onEdit, canDeleteFn }: Props) {
+export default function TaskTable({ tasks, selectedTaskId, onSelect, canDeleteFn }: Props) {
   const deleteTask = useDeleteTask();
+  const updateTask = useUpdateTask();
+  const { data: notas = [] } = useNotasQuery();
 
-  function handleDelete(task: Task) {
-    if (confirm(`Excluir "${task.title}"?`)) deleteTask.mutate(task.id);
+  const notaCount: Record<string, number> = {};
+  for (const n of notas) {
+    if (n.tarefaId) notaCount[n.tarefaId] = (notaCount[n.tarefaId] ?? 0) + 1;
   }
 
-  const COLS = [
-    { label: "Título", width: "min-w-[220px]" },
-    { label: "Responsável", width: "min-w-[120px]" },
-    { label: "Projeto", width: "min-w-[130px]" },
-    { label: "Status", width: "min-w-[120px]" },
-    { label: "Prioridade", width: "min-w-[90px]" },
-    { label: "Situação atual", width: "min-w-[200px]" },
-    { label: "Impeditivo", width: "min-w-[180px]" },
-    { label: "Prazo", width: "min-w-[90px]" },
-    { label: "Entrega", width: "min-w-[90px]" },
-    { label: "Conclusão", width: "min-w-[90px]" },
-    { label: "T.Est", width: "min-w-[60px]" },
-    { label: "T.Prev", width: "min-w-[65px]" },
-    { label: "Progresso", width: "min-w-[100px]" },
-    { label: "", width: "min-w-[60px]" },
-  ];
+  function handleUpdate(id: string, updates: Partial<Task>) {
+    updateTask.mutate({ id, updates });
+  }
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTableSectionElement>) => {
+    if (!selectedTaskId) return;
+    const idx = tasks.findIndex((t) => t.id === selectedTaskId);
+    if (e.key === "ArrowDown" && idx < tasks.length - 1) {
+      e.preventDefault();
+      onSelect(tasks[idx + 1]);
+    }
+    if (e.key === "ArrowUp" && idx > 0) {
+      e.preventDefault();
+      onSelect(tasks[idx - 1]);
+    }
+    if (e.key === "Escape") {
+      onSelect(tasks[idx]); // re-emit to trigger close in parent
+    }
+  }, [selectedTaskId, tasks, onSelect]);
 
   if (tasks.length === 0) {
     return (
@@ -71,111 +174,147 @@ export default function TaskTable({ tasks, onEdit, canDeleteFn }: Props) {
         <table className="w-full border-collapse">
           <thead>
             <tr className="bg-surface-50">
-              {COLS.map((col) => (
+              {[
+                { label: "Título",         w: "min-w-[220px]" },
+                { label: "Status",         w: "min-w-[120px]" },
+                { label: "Prioridade",     w: "min-w-[90px]"  },
+                { label: "Projeto",        w: "min-w-[120px]" },
+                { label: "Situação atual", w: "min-w-[210px]" },
+                { label: "Impeditivo",     w: "min-w-[160px]" },
+                { label: "Prazo",          w: "min-w-[90px]"  },
+                { label: "Progresso",      w: "min-w-[100px]" },
+                { label: "",               w: "min-w-[50px]"  },
+              ].map((c) => (
                 <th
-                  key={col.label}
-                  className={`${col.width} px-3 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-surface-400 border-b border-surface-200 whitespace-nowrap`}
+                  key={c.label}
+                  className={`${c.w} px-3 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-surface-400 border-b border-surface-200 whitespace-nowrap`}
                 >
-                  {col.label}
+                  {c.label}
                 </th>
               ))}
             </tr>
           </thead>
-          <tbody>
-            {tasks.map((task) => (
-              <tr key={task.id} className="hover:bg-surface-50/60 transition-colors group">
-                {/* Título */}
-                <Cell className="font-medium text-surface-900">
-                  <Truncated text={task.title} maxLen={45} />
-                </Cell>
-
-                {/* Responsável */}
-                <Cell>
-                  <span className="truncate block">{task.assignedToName.split(" ")[0]}</span>
-                </Cell>
-
-                {/* Projeto */}
-                <Cell>
-                  {task.projeto
-                    ? <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-surface-100 text-surface-600 text-[11px] font-medium">{task.projeto}</span>
-                    : <span className="text-surface-300">—</span>
-                  }
-                </Cell>
-
-                {/* Status */}
-                <Cell><StatusBadge status={task.status} /></Cell>
-
-                {/* Prioridade */}
-                <Cell><PriorityBadge priority={task.priority} /></Cell>
-
-                {/* Situação atual */}
-                <Cell className="text-surface-600">
-                  <Truncated text={task.situacaoAtual} maxLen={55} />
-                </Cell>
-
-                {/* Impeditivo */}
-                <Cell>
-                  {task.impeditivo ? (
-                    <span className="flex items-start gap-1 text-amber-600">
-                      <AlertTriangle size={11} className="shrink-0 mt-0.5" />
-                      <Truncated text={task.impeditivo} maxLen={45} className="text-amber-700" />
-                    </span>
-                  ) : (
-                    <span className="text-surface-300">—</span>
-                  )}
-                </Cell>
-
-                {/* Prazo */}
-                <Cell className="tabular-nums">{task.dueDate || <span className="text-surface-300">—</span>}</Cell>
-
-                {/* Entrega */}
-                <Cell className="tabular-nums">{task.dataEntrega || <span className="text-surface-300">—</span>}</Cell>
-
-                {/* Conclusão */}
-                <Cell className="tabular-nums">{task.dataConclusao || <span className="text-surface-300">—</span>}</Cell>
-
-                {/* T.Est */}
-                <Cell><HourCell value={task.tempoEstimado} /></Cell>
-
-                {/* T.Prev */}
-                <Cell>
-                  {task.tempoPrevisto != null && task.tempoEstimado != null ? (
-                    <span className={task.tempoPrevisto > task.tempoEstimado ? "text-amber-600 font-medium" : "text-brand-600 font-medium"}>
-                      {task.tempoPrevisto}h
-                    </span>
-                  ) : (
-                    <HourCell value={task.tempoPrevisto} />
-                  )}
-                </Cell>
-
-                {/* Progresso */}
-                <Cell>
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1 h-1.5 bg-surface-100 rounded-full overflow-hidden min-w-[50px]">
-                      <div
-                        className="h-1.5 bg-brand-500 rounded-full transition-all"
-                        style={{ width: `${task.progress}%` }}
-                      />
+          <tbody onKeyDown={handleKeyDown}>
+            {tasks.map((task) => {
+              const isSelected = task.id === selectedTaskId;
+              const count = notaCount[task.id] ?? 0;
+              return (
+                <tr
+                  key={task.id}
+                  tabIndex={0}
+                  onClick={() => onSelect(task)}
+                  className={`cursor-pointer transition-colors group border-l-2 outline-none focus:bg-brand-50 ${
+                    isSelected
+                      ? "bg-brand-50 border-l-brand-500"
+                      : "hover:bg-surface-50/70 border-l-transparent"
+                  }`}
+                >
+                  {/* Título + note badge */}
+                  <td className="px-3 py-2.5 border-b border-surface-100 align-middle">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[13px] font-semibold text-surface-900 leading-snug">
+                        {task.title.length > 42 ? task.title.slice(0, 42) + "…" : task.title}
+                      </span>
+                      {count > 0 && (
+                        <span
+                          title={`${count} nota${count > 1 ? "s" : ""} vinculada${count > 1 ? "s" : ""}`}
+                          className="inline-flex items-center gap-0.5 text-[10px] bg-brand-50 text-brand-600 border border-brand-200 px-1.5 py-0.5 rounded-full font-medium shrink-0"
+                        >
+                          <MessageSquare size={9} />
+                          {count}
+                        </span>
+                      )}
                     </div>
-                    <span className="text-[11px] text-surface-500 tabular-nums shrink-0">{task.progress}%</span>
-                  </div>
-                </Cell>
+                  </td>
 
-                {/* Ações */}
-                <Cell>
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={() => onEdit(task)} className="p-1.5 rounded hover:bg-surface-100 text-surface-400 hover:text-surface-600 transition-colors" title="Editar">
-                      <Edit3 size={13} />
-                    </button>
+                  {/* Status — inline dropdown */}
+                  <td className="px-3 py-2.5 border-b border-surface-100 align-middle">
+                    <InlinePill
+                      value={task.status}
+                      options={STATUS_OPTIONS}
+                      onChange={(v) => handleUpdate(task.id, { status: v })}
+                      renderLabel={() => <StatusBadge status={task.status} />}
+                    />
+                  </td>
+
+                  {/* Priority — inline dropdown */}
+                  <td className="px-3 py-2.5 border-b border-surface-100 align-middle">
+                    <InlinePill
+                      value={task.priority}
+                      options={PRIORITY_OPTIONS}
+                      onChange={(v) => handleUpdate(task.id, { priority: v })}
+                      renderLabel={() => <PriorityBadge priority={task.priority} />}
+                    />
+                  </td>
+
+                  {/* Projeto */}
+                  <td className="px-3 py-2.5 border-b border-surface-100 align-middle text-xs text-surface-600">
+                    {task.projeto
+                      ? <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-surface-100 text-surface-600 text-[11px] font-medium">{task.projeto}</span>
+                      : <span className="text-surface-300">—</span>
+                    }
+                  </td>
+
+                  {/* Situação atual — inline editable */}
+                  <td className="px-3 py-2.5 border-b border-surface-100 align-middle text-xs">
+                    <InlineTextCell
+                      value={task.situacaoAtual}
+                      onSave={(v) => handleUpdate(task.id, { situacaoAtual: v })}
+                    />
+                  </td>
+
+                  {/* Impeditivo */}
+                  <td className="px-3 py-2.5 border-b border-surface-100 align-middle text-xs">
+                    {task.impeditivo ? (
+                      <span className="flex items-start gap-1 text-amber-600">
+                        <AlertTriangle size={11} className="shrink-0 mt-0.5" />
+                        <span title={task.impeditivo}>
+                          {task.impeditivo.length > 42 ? task.impeditivo.slice(0, 42) + "…" : task.impeditivo}
+                        </span>
+                      </span>
+                    ) : (
+                      <span className="text-surface-300">—</span>
+                    )}
+                  </td>
+
+                  {/* Prazo */}
+                  <td
+                    className="px-3 py-2.5 border-b border-surface-100 align-middle text-xs tabular-nums text-surface-600"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <input
+                      type="date"
+                      defaultValue={task.dueDate ?? ""}
+                      onChange={(e) => handleUpdate(task.id, { dueDate: e.target.value || undefined })}
+                      className="text-xs border-none bg-transparent outline-none cursor-pointer text-surface-600 w-28"
+                    />
+                  </td>
+
+                  {/* Progresso */}
+                  <td className="px-3 py-2.5 border-b border-surface-100 align-middle" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 h-1.5 bg-surface-100 rounded-full overflow-hidden min-w-[50px]">
+                        <div className="h-1.5 bg-brand-500 rounded-full" style={{ width: `${task.progress}%` }} />
+                      </div>
+                      <span className="text-[11px] text-surface-500 tabular-nums shrink-0 w-8 text-right">{task.progress}%</span>
+                    </div>
+                  </td>
+
+                  {/* Delete */}
+                  <td className="px-2 py-2.5 border-b border-surface-100 align-middle" onClick={(e) => e.stopPropagation()}>
                     {canDeleteFn(task) && (
-                      <button onClick={() => handleDelete(task)} className="p-1.5 rounded hover:bg-red-50 text-surface-400 hover:text-red-500 transition-colors" title="Excluir">
+                      <button
+                        onClick={() => { if (confirm(`Excluir "${task.title}"?`)) deleteTask.mutate(task.id); }}
+                        className="p-1.5 rounded hover:bg-red-50 text-surface-300 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all"
+                        title="Excluir"
+                      >
                         <Trash2 size={13} />
                       </button>
                     )}
-                  </div>
-                </Cell>
-              </tr>
-            ))}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

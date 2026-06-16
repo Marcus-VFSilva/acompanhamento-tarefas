@@ -25,8 +25,8 @@ export function useFilteredTasks(userEmail?: string, isAdmin?: boolean) {
   return allTasks.filter((task) => {
     if (!isAdmin && userEmail && task.assignedTo !== userEmail) return false;
     if (filters.assignedTo && task.assignedTo !== filters.assignedTo) return false;
-    if (filters.status !== "todas" && task.status !== filters.status) return false;
-    if (filters.priority !== "todas" && task.priority !== filters.priority) return false;
+    if (filters.status.length > 0 && !filters.status.includes(task.status)) return false;
+    if (filters.priority.length > 0 && !filters.priority.includes(task.priority)) return false;
     if (filters.search) {
       const q = filters.search.toLowerCase();
       if (

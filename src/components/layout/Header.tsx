@@ -25,9 +25,17 @@ export default function Header({ userName, userEmail, isAdmin }: HeaderProps) {
     <header className="bg-linear-to-r from-[#033832] via-brand-500 to-[#05574e] flex-shrink-0">
       <div className="flex items-center h-12 md:h-14 px-3 md:px-5">
         <div className="flex items-center gap-3 md:gap-4 flex-1 min-w-0">
-          <span className="text-white font-bold text-sm md:text-base tracking-tight shrink-0">
-            Acomp. Tarefas
-          </span>
+          {/* Logo */}
+          <div className="flex items-center gap-2 shrink-0">
+            <img
+              src="/favicon.png"
+              alt="Grupo Roncador"
+              className="w-7 h-7 object-contain rounded"
+            />
+            <span className="text-white/80 font-semibold text-[13px] tracking-tight hidden lg:inline">
+              Grupo Roncador
+            </span>
+          </div>
           <div className="h-5 w-px bg-white/20 shrink-0" />
 
           <nav className="flex items-center gap-1">
