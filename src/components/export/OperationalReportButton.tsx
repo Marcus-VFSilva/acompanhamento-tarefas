@@ -10,6 +10,7 @@ import { exportOperationalPdf } from "@/lib/exportOperationalPdf";
 import { exportToPdfBlob } from "@/lib/exportPage";
 import {
   buildEmailBody,
+  buildEmailHtmlBody,
   buildEmailSubject,
   buildOperationalReportMetrics,
   buildReportFilenames,
@@ -85,6 +86,7 @@ export default function OperationalReportButton({
 
       const subject = buildEmailSubject(context);
       const body = buildEmailBody(context, metrics, filenames);
+      const htmlBody = buildEmailHtmlBody(context, metrics, filenames);
       const files = [
         new File([excelBlob], filenames.excel, {
           type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -100,6 +102,7 @@ export default function OperationalReportButton({
         toEmail: context.managerEmail,
         subject,
         body,
+        htmlBody,
         attachments: [
           { filename: filenames.excel, blob: excelBlob },
           { filename: filenames.pdfIndicadores, blob: pdfIndicadoresBlob },

@@ -9,6 +9,7 @@ interface BuildEmlOptions {
   toEmail?: string;
   subject: string;
   body: string;
+  htmlBody: string;
   attachments: EmlAttachment[];
 }
 
@@ -29,35 +30,6 @@ function encodeBase64Utf8(text: string): string {
   let binary = "";
   for (const byte of bytes) binary += String.fromCharCode(byte);
   return btoa(binary);
-}
-
-function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
-/** Converte o corpo em HTML para o Outlook abrir em modo rich text e aceitar assinatura com imagem. */
-function buildHtmlBody(plainBody: string): string {
-  const lines = plainBody.split(/\r\n/);
-  const htmlParts = lines.map((line) => {
-    if (!line) return "<br>";
-    return `<p style="margin:0 0 10px;font-family:Calibri,Arial,sans-serif;font-size:11pt;color:#1f2937;line-height:1.45">${escapeHtml(line)}</p>`;
-  });
-
-  // Espaço extra após "Atenciosamente," para a assinatura com imagem
-  htmlParts.push('<p style="margin:0;font-family:Calibri,Arial,sans-serif;font-size:11pt;"><br><br></p>');
-
-  return [
-    "<!DOCTYPE html>",
-    "<html>",
-    "<head><meta charset=\"utf-8\"></head>",
-    '<body style="margin:0;padding:0;font-family:Calibri,Arial,sans-serif;font-size:11pt;color:#1f2937;">',
-    htmlParts.join(""),
-    "</body></html>",
-  ].join("");
 }
 
 async function blobToBase64Lines(blob: Blob): Promise<string> {
@@ -89,7 +61,7 @@ export async function buildOperationalEml(options: BuildEmlOptions): Promise<Blo
   const outerBoundary = `----=_Report_${Date.now()}`;
   const altBoundary = `----=_Alt_${Date.now() + 1}`;
   const plainBody = options.body.replace(/\n/g, CRLF);
-  const htmlBody = buildHtmlBody(plainBody);
+  const htmlBody = options.htmlBody;
   const hasAttachments = options.attachments.length > 0;
   const parts: string[] = [];
 
