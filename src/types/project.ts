@@ -11,6 +11,9 @@ export interface UserSettings {
   name: string;
   managerEmail?: string;
   managerName?: string;
+  emailSignature?: string;
+  emailSignatureImage?: string;
+  emailSignatureImageMime?: string;
 }
 
 export interface UserSettingsResponse extends UserSettings {

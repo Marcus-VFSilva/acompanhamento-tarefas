@@ -20,10 +20,8 @@ export async function exportToPng(element: HTMLElement, filename: string) {
   link.click();
 }
 
-export async function exportToPdf(element: HTMLElement, filename: string) {
-  const canvas = await captureElement(element);
+function buildPdfFromCanvas(canvas: HTMLCanvasElement) {
   const imgData = canvas.toDataURL("image/png");
-
   const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const pageWidth = pdf.internal.pageSize.getWidth();
   const pageHeight = pdf.internal.pageSize.getHeight();
@@ -45,5 +43,15 @@ export async function exportToPdf(element: HTMLElement, filename: string) {
     heightLeft -= pageHeight - margin * 2;
   }
 
-  pdf.save(`${filename}.pdf`);
+  return pdf;
+}
+
+export async function exportToPdfBlob(element: HTMLElement): Promise<Blob> {
+  const canvas = await captureElement(element);
+  return buildPdfFromCanvas(canvas).output("blob");
+}
+
+export async function exportToPdf(element: HTMLElement, filename: string) {
+  const canvas = await captureElement(element);
+  buildPdfFromCanvas(canvas).save(`${filename}.pdf`);
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, Trash2, Loader2, Users, FolderKanban, Save, Mail } from "lucide-react";
+import { Plus, Trash2, Loader2, Users, FolderKanban, Save, Mail, PenLine } from "lucide-react";
 import { useProjectsQuery, useCreateProject, useDeleteProject } from "@/hooks/useProjects";
 import { useSettingsQuery, useUpdateSettings } from "@/hooks/useSettings";
 
@@ -52,7 +52,7 @@ export default function ConfigClient({ userEmail, userName }: Props) {
       <div>
         <h1 className="text-xl font-bold text-surface-900">Configurações</h1>
         <p className="text-sm text-surface-400 mt-0.5">
-          Gerencie projetos e defina seu gestor para compartilhar indicadores e tarefas.
+          Gerencie projetos e defina seu gestor para os reports operacionais.
         </p>
       </div>
 
@@ -127,6 +127,28 @@ export default function ConfigClient({ userEmail, userName }: Props) {
             </div>
           </div>
         )}
+      </section>
+
+      {/* Assinatura de e-mail */}
+      <section className="bg-white rounded-xl border border-surface-200 p-5 space-y-3">
+        <div className="flex items-center gap-2">
+          <PenLine size={16} className="text-brand-500" />
+          <h2 className="text-sm font-bold text-surface-700">Assinatura de e-mail</h2>
+        </div>
+        <p className="text-xs text-surface-500 leading-relaxed">
+          O sistema não consegue acessar as assinaturas salvas no seu Outlook — elas ficam apenas
+          no seu computador. Mas ao abrir o arquivo <strong>.eml</strong> gerado, o e-mail fica
+          editável e você insere a sua assinatura em um clique.
+        </p>
+        <ol className="text-xs text-surface-600 leading-relaxed list-decimal list-inside space-y-1.5 bg-surface-50 rounded-lg p-4 border border-surface-100">
+          <li>Gere o report operacional e abra o <strong>.eml</strong> no Outlook Classic</li>
+          <li>Posicione o cursor após &quot;Atenciosamente,&quot;</li>
+          <li>Vá em <strong>Inserir → Assinatura</strong> e escolha a sua assinatura corporativa</li>
+          <li>Revise e envie</li>
+        </ol>
+        <p className="text-[11px] text-surface-400">
+          Os anexos (Excel e PDFs) já vêm incluídos no .eml — só falta a assinatura visual.
+        </p>
       </section>
 
       {/* Projetos */}

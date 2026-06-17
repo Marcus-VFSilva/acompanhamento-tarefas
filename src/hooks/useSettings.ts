@@ -18,7 +18,13 @@ export function useSettingsQuery() {
 export function useUpdateSettings() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (data: { managerEmail?: string; managerName?: string }) => {
+    mutationFn: async (data: {
+      managerEmail?: string;
+      managerName?: string;
+      emailSignature?: string;
+      emailSignatureImage?: string | null;
+      emailSignatureImageMime?: string;
+    }) => {
       const res = await fetch("/api/settings", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },

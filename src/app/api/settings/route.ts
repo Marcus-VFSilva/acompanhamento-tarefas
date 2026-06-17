@@ -68,21 +68,52 @@ export async function PUT(req: NextRequest) {
     const body = await req.json();
     const collection = await getUserSettingsCollection();
 
-    const managerEmail = body.managerEmail?.trim().toLowerCase() || undefined;
-    const managerName = body.managerName?.trim() || undefined;
+    const managerEmail =
+      body.managerEmail !== undefined
+        ? body.managerEmail?.trim().toLowerCase() || undefined
+        : undefined;
+    const managerName =
+      body.managerName !== undefined ? body.managerName?.trim() || undefined : undefined;
+    const emailSignature =
+      body.emailSignature !== undefined ? body.emailSignature?.trim() || undefined : undefined;
 
     if (managerEmail === email) {
       return NextResponse.json({ error: "Você não pode ser seu próprio gestor" }, { status: 400 });
     }
 
+    const $set: Record<string, unknown> = {
+      name: session.user.name ?? emailToName(email),
+    };
+    const $unset: Record<string, string> = {};
+
+    if (body.managerEmail !== undefined) {
+      $set.managerEmail = managerEmail;
+      $set.managerName = managerEmail ? (managerName || emailToName(managerEmail)) : undefined;
+    }
+
+    if (body.emailSignature !== undefined) {
+      $set.emailSignature = emailSignature;
+    }
+
+    if (body.emailSignatureImage !== undefined) {
+      const imageData = typeof body.emailSignatureImage === "string" ? body.emailSignatureImage.trim() : "";
+      if (imageData) {
+        if (imageData.length > 1_200_000) {
+          return NextResponse.json({ error: "Imagem muito grande (máx. ~900 KB)" }, { status: 400 });
+        }
+        $set.emailSignatureImage = imageData;
+        $set.emailSignatureImageMime = body.emailSignatureImageMime?.trim() || "image/png";
+      } else {
+        $unset.emailSignatureImage = "";
+        $unset.emailSignatureImageMime = "";
+      }
+    }
+
     await collection.updateOne(
       { _id: email as any },
       {
-        $set: {
-          name: session.user.name ?? emailToName(email),
-          managerEmail,
-          managerName: managerEmail ? (managerName || emailToName(managerEmail)) : undefined,
-        },
+        $set,
+        ...(Object.keys($unset).length > 0 ? { $unset } : {}),
         $setOnInsert: { _id: email },
       },
       { upsert: true }

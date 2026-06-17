@@ -11,12 +11,14 @@ import {
 } from "recharts";
 import { CheckCircle2, Clock, ListTodo, AlertCircle, XCircle, Timer, Server } from "lucide-react";
 import ExportButtons from "@/components/export/ExportButtons";
+import OperationalReportButton from "@/components/export/OperationalReportButton";
+import { useSettingsQuery } from "@/hooks/useSettings";
 import type { Task } from "@/types";
 import { StatusBadge, PriorityBadge } from "@/components/tasks/StatusBadge";
 import { STATUS_SISTEMA } from "@/types/system";
 import Link from "next/link";
 
-interface Props { isAdmin: boolean; userEmail: string; }
+interface Props { isAdmin: boolean; userEmail: string; userName: string; }
 
 const STATUS_COLORS: Record<string, string> = {
   pendente: "#94a3b8",
@@ -47,9 +49,10 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
   return <h2 className="text-sm font-bold text-surface-700">{children}</h2>;
 }
 
-export default function RelatoriosClient({ isAdmin }: Props) {
+export default function RelatoriosClient({ isAdmin, userEmail, userName }: Props) {
   const exportRef = useRef<HTMLDivElement>(null);
   const { data: allTasks = [] } = useTasksQuery();
+  const { data: settings } = useSettingsQuery();
   const { isTeamLeader, canViewTeam, teamLabel } = useUserRole(isAdmin);
   const { data: sistemas = [] } = useSistemasQuery();
   const tasks = allTasks;
@@ -102,7 +105,17 @@ export default function RelatoriosClient({ isAdmin }: Props) {
             gerado em {new Date().toLocaleDateString("pt-BR")}
           </p>
         </div>
-        <ExportButtons tasks={tasks} exportRef={exportRef} filenamePrefix="relatorio" />
+        <div className="flex flex-col sm:flex-row items-end gap-3">
+          <OperationalReportButton
+            tasks={tasks}
+            exportRef={exportRef}
+            reporterName={userName}
+            reporterEmail={userEmail}
+            managerEmail={settings?.managerEmail}
+            managerName={settings?.managerName}
+          />
+          <ExportButtons tasks={tasks} exportRef={exportRef} filenamePrefix="relatorio" />
+        </div>
       </div>
 
       <div ref={exportRef} className="space-y-6">
