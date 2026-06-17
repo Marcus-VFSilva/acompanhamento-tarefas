@@ -44,7 +44,7 @@ export default function ConfigClient({ userEmail, userName }: Props) {
   async function handleSaveManager(e: React.FormEvent) {
     e.preventDefault();
     await updateSettings.mutateAsync({
-      managerEmail: managerEmail.trim() || undefined,
+      managerEmail: managerEmail.trim().toLowerCase(),
       managerName: managerName.trim() || undefined,
     });
     setSaved(true);

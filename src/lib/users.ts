@@ -99,17 +99,22 @@ async function createUserSettings(
 ) {
   const settingsCol = await getUserSettingsCollection();
   const now = new Date().toISOString();
+  const $set: Record<string, unknown> = {
+    userId,
+    email,
+    name,
+    updatedAt: now,
+  };
+
+  if (managerEmail) {
+    $set.managerEmail = managerEmail.toLowerCase();
+    $set.managerName = managerName ?? emailToName(managerEmail);
+  }
+
   await settingsCol.updateOne(
     { userId },
     {
-      $set: {
-        userId,
-        email,
-        name,
-        managerEmail: managerEmail?.toLowerCase(),
-        managerName,
-        updatedAt: now,
-      },
+      $set,
       $unset: { managerId: "" },
       $setOnInsert: {
         _id: new ObjectId(),
@@ -201,7 +206,27 @@ export async function verifyUserCredentials(
 }
 
 export async function ensureUserSettings(userId: string, email: string, name: string) {
-  await createUserSettings(new ObjectId(userId), email.toLowerCase(), name);
+  const settingsCol = await getUserSettingsCollection();
+  const userObjectId = new ObjectId(userId);
+  const now = new Date().toISOString();
+
+  await settingsCol.updateOne(
+    { userId: userObjectId },
+    {
+      $set: {
+        email: email.toLowerCase(),
+        name,
+        updatedAt: now,
+      },
+      $setOnInsert: {
+        _id: new ObjectId(),
+        userId: userObjectId,
+        createdAt: now,
+      },
+      $unset: { managerId: "" },
+    },
+    { upsert: true },
+  );
 }
 
 export async function userHasPassword(userId: string): Promise<boolean> {
