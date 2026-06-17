@@ -8,7 +8,7 @@ export function downloadBlob(blob: Blob, filename: string) {
 }
 
 export async function tryShareFiles(
-  files: File[],
+  files: File[], 
   title: string,
   text: string,
 ): Promise<boolean> {
