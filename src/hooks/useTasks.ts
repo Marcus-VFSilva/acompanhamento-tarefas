@@ -3,8 +3,8 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTaskStore } from "@/store/taskStore";
 import type { Task, Subtask } from "@/types";
+import type { UserListItem } from "@/types/user";
 
-// ── Core fetch ──────────────────────────────────────────────────────
 export function useTasksQuery() {
   return useQuery<Task[]>({
     queryKey: ["tasks"],
@@ -17,14 +17,25 @@ export function useTasksQuery() {
   });
 }
 
-// ── Client-side filter (uses Zustand filters + role) ────────────────
-export function useFilteredTasks(userEmail?: string, canViewTeam?: boolean) {
+export function useUsersQuery() {
+  return useQuery<UserListItem[]>({
+    queryKey: ["users"],
+    queryFn: async () => {
+      const res = await fetch("/api/users");
+      if (!res.ok) throw new Error("Erro ao buscar usuários");
+      return res.json();
+    },
+    staleTime: 1000 * 60,
+  });
+}
+
+export function useFilteredTasks(userId?: string, canViewTeam?: boolean) {
   const { data: allTasks = [] } = useTasksQuery();
   const filters = useTaskStore((s) => s.filters);
 
   return allTasks.filter((task) => {
-    if (!canViewTeam && userEmail && task.assignedTo !== userEmail) return false;
-    if (filters.assignedTo && task.assignedTo !== filters.assignedTo) return false;
+    if (!canViewTeam && userId && task.assignedUserId !== userId) return false;
+    if (filters.assignedUserId && task.assignedUserId !== filters.assignedUserId) return false;
     if (filters.status.length > 0 && !filters.status.includes(task.status)) return false;
     if (filters.priority.length > 0 && !filters.priority.includes(task.priority)) return false;
     if (filters.search) {
@@ -39,23 +50,11 @@ export function useFilteredTasks(userEmail?: string, canViewTeam?: boolean) {
   });
 }
 
-// ── All users (derived from tasks) ─────────────────────────────────
+/** @deprecated Use useUsersQuery */
 export function useAllUsersQuery() {
-  const { data: tasks = [] } = useTasksQuery();
-
-  return useQuery({
-    queryKey: ["users", tasks.map((t) => t.assignedTo).join(",")],
-    queryFn: () => {
-      const map = new Map<string, string>();
-      tasks.forEach((t) => map.set(t.assignedTo, t.assignedToName));
-      return Array.from(map.entries()).map(([email, name]) => ({ email, name }));
-    },
-    enabled: tasks.length > 0,
-    initialData: [],
-  });
+  return useUsersQuery();
 }
 
-// ── Mutations ───────────────────────────────────────────────────────
 export function useCreateTask() {
   const queryClient = useQueryClient();
   return useMutation({

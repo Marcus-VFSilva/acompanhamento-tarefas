@@ -29,10 +29,10 @@ export async function exportToExcel(tasks: Task[], filename = "relatorio-tarefas
   // ── Sheet 2: Resumo por colaborador ──
   const byUser = new Map<string, { name: string; total: number; concluido: number; em_andamento: number; pendente: number; hEst: number; hPrev: number }>();
   tasks.forEach((t) => {
-    if (!byUser.has(t.assignedTo)) {
-      byUser.set(t.assignedTo, { name: t.assignedToName, total: 0, concluido: 0, em_andamento: 0, pendente: 0, hEst: 0, hPrev: 0 });
+    if (!byUser.has(t.assignedUserId)) {
+      byUser.set(t.assignedUserId, { name: t.assignedToName, total: 0, concluido: 0, em_andamento: 0, pendente: 0, hEst: 0, hPrev: 0 });
     }
-    const u = byUser.get(t.assignedTo)!;
+    const u = byUser.get(t.assignedUserId)!;
     u.total++;
     if (t.status === "concluido") u.concluido++;
     else if (t.status === "em_andamento") u.em_andamento++;

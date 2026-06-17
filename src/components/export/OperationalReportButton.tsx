@@ -142,19 +142,7 @@ export default function OperationalReportButton({
 
   return (
     <div className="flex flex-col items-end gap-1.5 shrink-0">
-      <button
-        onClick={handleSendReport}
-        disabled={isLoading || tasks.length === 0}
-        title={tasks.length === 0 ? "Nenhuma tarefa para exportar" : undefined}
-        className="inline-flex items-center gap-2 px-4 py-2.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-sm font-semibold transition-colors disabled:opacity-60 shadow-sm"
-      >
-        {isLoading ? (
-          <Loader2 size={15} className="animate-spin" />
-        ) : (
-          <Send size={15} />
-        )}
-        {isLoading ? STEP_LABELS[step as keyof typeof STEP_LABELS] ?? "Processando…" : "Enviar report operacional"}
-      </button>
+  
 
       {!hasManager && step === "idle" && (
         <p className="text-[11px] text-amber-600 flex items-center gap-1">
@@ -186,6 +174,20 @@ export default function OperationalReportButton({
       {error && (
         <p className="text-[11px] text-red-500 max-w-[300px] text-right">{error}</p>
       )}
+
+<button
+        onClick={handleSendReport}
+        disabled={isLoading || tasks.length === 0}
+        title={tasks.length === 0 ? "Nenhuma tarefa para exportar" : undefined}
+        className="inline-flex items-center gap-2 px-4 py-2.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-sm font-semibold transition-colors disabled:opacity-60 shadow-sm"
+      >
+        {isLoading ? (
+          <Loader2 size={15} className="animate-spin" />
+        ) : (
+          <Send size={15} />
+        )}
+        {isLoading ? STEP_LABELS[step as keyof typeof STEP_LABELS] ?? "Processando…" : "Enviar report operacional"}
+      </button>
     </div>
   );
 }

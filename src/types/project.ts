@@ -2,11 +2,13 @@ export interface Project {
   id: string;
   name: string;
   active: boolean;
+  createdByUserId?: string;
   createdAt: string;
   updatedAt: string;
 }
 
 export interface UserSettings {
+  userId: string;
   email: string;
   name: string;
   managerEmail?: string;
@@ -18,5 +20,6 @@ export interface UserSettings {
 
 export interface UserSettingsResponse extends UserSettings {
   isManager: boolean;
-  subordinates: { email: string; name: string }[];
+  hasPassword: boolean;
+  subordinates: { id: string; email: string; name: string }[];
 }

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { ObjectId } from "mongodb";
 import { auth } from "@/auth";
 import { getProjectsCollection, serializeProject } from "@/lib/mongodb";
 import { PROJECTS } from "@/types";
@@ -65,7 +66,14 @@ export async function POST(req: NextRequest) {
 
     const id = generateId();
     const today = now();
-    const doc = { _id: id, name: trimmed, active: true, createdAt: today, updatedAt: today };
+    const doc = {
+      _id: id,
+      name: trimmed,
+      active: true,
+      createdByUserId: new ObjectId(session.user.id),
+      createdAt: today,
+      updatedAt: today,
+    };
     await collection.insertOne(doc as any);
 
     return NextResponse.json(serializeProject(doc), { status: 201 });

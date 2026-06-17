@@ -3,7 +3,7 @@
 import { useState, useCallback } from "react";
 import { Plus, Search, X, LayoutGrid, List, Filter, Eye } from "lucide-react";
 import { useTaskStore, DEFAULT_FILTERS } from "@/store/taskStore";
-import { useFilteredTasks, useAllUsersQuery } from "@/hooks/useTasks";
+import { useFilteredTasks, useUsersQuery } from "@/hooks/useTasks";
 import { useUserRole } from "@/hooks/useUserRole";
 import TaskCard from "@/components/tasks/TaskCard";
 import TaskTable from "@/components/tasks/TaskTable";
@@ -13,6 +13,7 @@ import type { Task, TaskStatus, TaskPriority } from "@/types";
 
 interface Props {
   isAdmin: boolean;
+  userId: string;
   userEmail: string;
   userName: string;
 }
@@ -35,15 +36,15 @@ const PRIORITY_PILLS: { value: TaskPriority; label: string }[] = [
 const PILL_ON  = "bg-brand-700 text-white border-brand-700 shadow-sm";
 const PILL_OFF = "bg-transparent text-surface-600 border-surface-200 hover:bg-surface-50 hover:border-surface-300 hover:text-surface-800";
 
-export default function TarefasClient({ isAdmin, userEmail, userName }: Props) {
+export default function TarefasClient({ isAdmin, userId, userEmail, userName }: Props) {
   const [newTaskOpen, setNewTaskOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [view, setView] = useState<ViewMode>("tabela");
 
   const { filters, setFilters, resetFilters } = useTaskStore();
   const { isTeamLeader, canViewTeam, subordinates, canEditTask, teamLabel } = useUserRole(isAdmin);
-  const tasks = useFilteredTasks(userEmail, canViewTeam);
-  const { data: users = [] } = useAllUsersQuery();
+  const tasks = useFilteredTasks(userId, canViewTeam);
+  const { data: users = [] } = useUsersQuery();
 
   const teamMembers = isTeamLeader
     ? subordinates
@@ -72,88 +73,57 @@ export default function TarefasClient({ isAdmin, userEmail, userName }: Props) {
   const hasActiveFilter =
     !isDefaultStatus ||
     filters.priority.length > 0 ||
-    filters.assignedTo !== "" ||
+    filters.assignedUserId !== "" ||
     filters.search !== "";
 
-  const canDelete = (task: Task) => !isTeamLeader && (isAdmin || task.assignedTo === userEmail);
+  const canDelete = (task: Task) => !isTeamLeader && (isAdmin || task.assignedUserId === userId);
 
   const selectedTaskLive = selectedTask
-    ? (tasks.find((t) => t.id === selectedTask.id) ?? selectedTask)
+    ? tasks.find((t) => t.id === selectedTask.id) ?? selectedTask
     : null;
 
   const selectedIndex = selectedTaskLive ? tasks.findIndex((t) => t.id === selectedTaskLive.id) : -1;
-  const panelReadOnly = selectedTaskLive ? !canEditTask(selectedTaskLive, userEmail) : false;
+  const panelReadOnly = selectedTaskLive ? !canEditTask(selectedTaskLive, userId) : false;
 
-  const handleSelect = useCallback((task: Task) => {
-    setSelectedTask((prev) => (prev?.id === task.id ? null : task));
-  }, []);
-
-  function handlePrev() {
+  const handleSelect = useCallback((task: Task) => setSelectedTask(task), []);
+  const handlePrev = useCallback(() => {
     if (selectedIndex > 0) setSelectedTask(tasks[selectedIndex - 1]);
-  }
-
-  function handleNext() {
+  }, [selectedIndex, tasks]);
+  const handleNext = useCallback(() => {
     if (selectedIndex < tasks.length - 1) setSelectedTask(tasks[selectedIndex + 1]);
-  }
+  }, [selectedIndex, tasks]);
 
   return (
     <>
       <div className="p-4 md:p-6 max-w-[1400px] mx-auto space-y-4">
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h1 className="text-xl font-bold text-surface-900">
-              {isTeamLeader ? "Tarefas da Equipe" : "Minhas Tarefas"}
-            </h1>
-            <p className="text-sm text-surface-400 mt-0.5">
-              {isTeamLeader && teamLabel}
-              {isTeamLeader && " · "}
-              {tasks.length} tarefa{tasks.length !== 1 ? "s" : ""}
-              {hasActiveFilter && " (filtrado)"}
-              {isTeamLeader && (
-                <span className="ml-2 inline-flex items-center gap-1 text-amber-600 font-medium">
-                  <Eye size={12} /> somente visualização
-                </span>
-              )}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-0.5 bg-surface-100 rounded-lg p-0.5">
-              <button
-                onClick={() => setView("tabela")}
-                className={`p-1.5 rounded-md transition-all ${view === "tabela" ? "bg-white shadow-sm text-surface-700" : "text-surface-400 hover:text-surface-600"}`}
-                title="Tabela"
-              >
-                <List size={15} />
-              </button>
-              <button
-                onClick={() => setView("cards")}
-                className={`p-1.5 rounded-md transition-all ${view === "cards" ? "bg-white shadow-sm text-surface-700" : "text-surface-400 hover:text-surface-600"}`}
-                title="Cards"
-              >
-                <LayoutGrid size={15} />
-              </button>
-            </div>
-
-            {!isTeamLeader && (
-              <button
-                onClick={() => setNewTaskOpen(true)}
-                className="inline-flex items-center gap-2 px-4 py-2.5 bg-brand-500 hover:bg-brand-600 text-white rounded-xl text-sm font-medium transition-colors shrink-0"
-              >
-                <Plus size={16} />
-                <span className="hidden sm:inline">Nova tarefa</span>
-              </button>
+            <h1 className="text-xl font-bold text-surface-900">Tarefas</h1>
+            {teamLabel && (
+              <p className="text-xs text-brand-600 font-medium mt-0.5 flex items-center gap-1">
+                <Eye size={12} /> {teamLabel}
+              </p>
             )}
           </div>
+          {!isTeamLeader && (
+            <button
+              onClick={() => setNewTaskOpen(true)}
+              className="flex items-center gap-2 px-4 py-2.5 bg-brand-500 hover:bg-brand-600 text-white rounded-xl text-sm font-semibold transition-colors shadow-sm"
+            >
+              <Plus size={16} /> Nova tarefa
+            </button>
+          )}
         </div>
 
-        <div className="bg-white rounded-xl border border-surface-200 p-3 space-y-2.5">
+        <div className="bg-white rounded-xl border border-surface-200 p-4 space-y-4">
           <div className="relative">
-            <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-surface-400 pointer-events-none" />
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-surface-400" />
             <input
+              type="text"
+              placeholder="Buscar tarefas..."
               value={filters.search}
               onChange={(e) => setFilters({ search: e.target.value })}
-              placeholder={isTeamLeader ? "Buscar nas tarefas da equipe..." : "Buscar por título, descrição..."}
-              className="w-full pl-8 pr-3 py-1.5 border border-surface-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500"
+              className="w-full pl-9 pr-3 py-2 border border-surface-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/30"
             />
           </div>
 
@@ -166,13 +136,13 @@ export default function TarefasClient({ isAdmin, userEmail, userName }: Props) {
                   Colaborador
                 </p>
                 <select
-                  value={filters.assignedTo}
-                  onChange={(e) => setFilters({ assignedTo: e.target.value })}
+                  value={filters.assignedUserId}
+                  onChange={(e) => setFilters({ assignedUserId: e.target.value })}
                   className="text-xs border border-surface-200 rounded-lg px-2.5 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/30"
                 >
                   <option value="">Todos</option>
                   {teamMembers.map((u) => (
-                    <option key={u.email} value={u.email}>{u.name}</option>
+                    <option key={u.id} value={u.id}>{u.name}</option>
                   ))}
                 </select>
               </div>
@@ -285,10 +255,10 @@ export default function TarefasClient({ isAdmin, userEmail, userName }: Props) {
       {newTaskOpen && (
         <TaskModal
           task={null}
-          userEmail={userEmail}
+          userId={userId}
           userName={userName}
           isAdmin={isAdmin}
-          users={users.length > 0 ? users : [{ email: userEmail, name: userName }]}
+          users={users.length > 0 ? users : [{ id: userId, email: userEmail, name: userName }]}
           onClose={() => setNewTaskOpen(false)}
         />
       )}

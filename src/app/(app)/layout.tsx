@@ -7,13 +7,16 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const session = await auth();
   if (!session) redirect("/login");
 
-  const isAdmin = (session.user as any)?.isAdmin ?? false;
+  const isAdmin = session.user?.isAdmin ?? false;
   const email = session.user?.email?.toLowerCase() ?? "";
 
   let isManager = false;
   if (email) {
     const settingsCol = await getUserSettingsCollection();
-    const count = await settingsCol.countDocuments({ managerEmail: email });
+    const count = await settingsCol.countDocuments({
+      managerEmail: email,
+      email: { $ne: email },
+    });
     isManager = count > 0;
   }
 

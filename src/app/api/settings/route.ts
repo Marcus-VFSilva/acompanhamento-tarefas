@@ -1,56 +1,55 @@
 import { NextRequest, NextResponse } from "next/server";
+import { ObjectId } from "mongodb";
 import { auth } from "@/auth";
 import { getUserSettingsCollection, serializeUserSettings } from "@/lib/mongodb";
+import { emailToName, findOrCreateUserByEmail, userHasPassword } from "@/lib/users";
 import type { UserSettingsResponse } from "@/types/project";
 
-function emailToName(email: string): string {
-  return email
-    .split("@")[0]
-    .split(".")
-    .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
-    .join(" ");
+async function buildSettingsResponse(
+  doc: Record<string, unknown>,
+  collection: Awaited<ReturnType<typeof getUserSettingsCollection>>,
+  leaderEmail: string,
+): Promise<UserSettingsResponse> {
+  const userId = (doc.userId as ObjectId).toHexString();
+  const normalizedLeader = leaderEmail.toLowerCase();
+  const subordinates = await collection
+    .find({ managerEmail: normalizedLeader, email: { $ne: normalizedLeader } })
+    .toArray();
+
+  return {
+    ...serializeUserSettings(doc),
+    isManager: subordinates.length > 0,
+    hasPassword: await userHasPassword(userId),
+    subordinates: subordinates.map((s) => ({
+      id: (s.userId as ObjectId).toHexString(),
+      email: s.email ?? "",
+      name: s.name ?? emailToName(s.email ?? ""),
+    })),
+  };
 }
 
 export async function GET() {
   try {
     const session = await auth();
-    if (!session?.user?.email) {
+    if (!session?.user?.id || !session.user.email) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const userId = session.user.id;
     const email = session.user.email.toLowerCase();
     const collection = await getUserSettingsCollection();
 
-    let doc = await collection.findOne({ _id: email as any });
+    let doc = await collection.findOne({ userId: new ObjectId(userId) });
     if (!doc) {
-      const newDoc = {
-        _id: email,
-        name: session.user.name ?? emailToName(email),
-        managerEmail: undefined,
-        managerName: undefined,
-      };
-      await collection.insertOne(newDoc as any);
-      doc = await collection.findOne({ _id: email as any });
+      await findOrCreateUserByEmail(email, session.user.name ?? undefined);
+      doc = await collection.findOne({ userId: new ObjectId(userId) });
     }
 
     if (!doc) {
       return NextResponse.json({ error: "Failed to load settings" }, { status: 500 });
     }
 
-    const subordinates = await collection
-      .find({ managerEmail: email })
-      .toArray();
-
-    const response: UserSettingsResponse = {
-      ...serializeUserSettings(doc),
-      isManager: subordinates.length > 0,
-      subordinates: subordinates.map((s) => ({
-        email: s._id.toString(),
-        name: s.name ?? emailToName(s._id.toString()),
-      })),
-    };
-
-    return NextResponse.json(response);
+    return NextResponse.json(await buildSettingsResponse(doc, collection, email));
   } catch (err) {
     console.error("[GET /api/settings]", err);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
@@ -60,10 +59,11 @@ export async function GET() {
 export async function PUT(req: NextRequest) {
   try {
     const session = await auth();
-    if (!session?.user?.email) {
+    if (!session?.user?.id || !session.user.email) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const userId = session.user.id;
     const email = session.user.email.toLowerCase();
     const body = await req.json();
     const collection = await getUserSettingsCollection();
@@ -82,13 +82,21 @@ export async function PUT(req: NextRequest) {
     }
 
     const $set: Record<string, unknown> = {
+      userId: new ObjectId(userId),
+      email,
       name: session.user.name ?? emailToName(email),
+      updatedAt: new Date().toISOString(),
     };
-    const $unset: Record<string, string> = {};
+    const $unset: Record<string, string> = { managerId: "" };
 
     if (body.managerEmail !== undefined) {
-      $set.managerEmail = managerEmail;
-      $set.managerName = managerEmail ? (managerName || emailToName(managerEmail)) : undefined;
+      if (managerEmail) {
+        $set.managerEmail = managerEmail;
+        $set.managerName = managerName || emailToName(managerEmail);
+      } else {
+        $unset.managerEmail = "";
+        $unset.managerName = "";
+      }
     }
 
     if (body.emailSignature !== undefined) {
@@ -110,31 +118,21 @@ export async function PUT(req: NextRequest) {
     }
 
     await collection.updateOne(
-      { _id: email as any },
+      { userId: new ObjectId(userId) },
       {
         $set,
         ...(Object.keys($unset).length > 0 ? { $unset } : {}),
-        $setOnInsert: { _id: email },
+        $setOnInsert: { _id: new ObjectId(), createdAt: new Date().toISOString() },
       },
-      { upsert: true }
+      { upsert: true },
     );
 
-    const doc = await collection.findOne({ _id: email as any });
+    const doc = await collection.findOne({ userId: new ObjectId(userId) });
     if (!doc) {
       return NextResponse.json({ error: "Failed to save settings" }, { status: 500 });
     }
-    const subordinates = await collection.find({ managerEmail: email }).toArray();
 
-    const response: UserSettingsResponse = {
-      ...serializeUserSettings(doc),
-      isManager: subordinates.length > 0,
-      subordinates: subordinates.map((s) => ({
-        email: s._id.toString(),
-        name: s.name ?? emailToName(s._id.toString()),
-      })),
-    };
-
-    return NextResponse.json(response);
+    return NextResponse.json(await buildSettingsResponse(doc, collection, email));
   } catch (err) {
     console.error("[PUT /api/settings]", err);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

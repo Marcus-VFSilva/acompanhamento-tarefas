@@ -2,6 +2,7 @@ export type NoteType = "reuniao" | "anotacao" | "lembrete";
 
 export interface Note {
   id: string;
+  userId: string;
   titulo: string;
   conteudo: string;
   tipo: NoteType;
@@ -9,7 +10,7 @@ export interface Note {
   tarefaTitulo?: string;
   data: string;
   recorrencia?: "semanal" | null;
-  diasSemana?: number[];  // 0=Dom 1=Seg 2=Ter 3=Qua 4=Qui 5=Sex 6=Sáb
+  diasSemana?: number[];
   createdAt: string;
   updatedAt: string;
 }

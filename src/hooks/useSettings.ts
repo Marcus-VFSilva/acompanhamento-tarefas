@@ -42,3 +42,23 @@ export function useUpdateSettings() {
     },
   });
 }
+
+export function useChangePassword() {
+  return useMutation({
+    mutationFn: async (data: {
+      newPassword: string;
+      confirmPassword: string;
+    }) => {
+      const res = await fetch("/api/auth/password", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error ?? "Erro ao alterar senha");
+      }
+      return res.json();
+    },
+  });
+}

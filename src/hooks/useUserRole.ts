@@ -9,9 +9,9 @@ export function useUserRole(isAdmin: boolean) {
   const isTeamLeader = !isAdmin && (settings?.isManager ?? false);
   const subordinates = settings?.subordinates ?? [];
 
-  function canEditTask(task: Task, userEmail: string) {
+  function canEditTask(task: Task, userId: string) {
     if (isTeamLeader) return false;
-    return isAdmin || task.assignedTo.toLowerCase() === userEmail.toLowerCase();
+    return isAdmin || task.assignedUserId === userId;
   }
 
   return {

@@ -1,13 +1,14 @@
 import NextAuth from "next-auth";
 import MicrosoftEntraID from "next-auth/providers/microsoft-entra-id";
 import Credentials from "next-auth/providers/credentials";
-
+import {
+  verifyUserCredentials,
+  ensureUserSettings,
+  findOrCreateUserByEmail,
+  emailToName,
+} from "@/lib/users";
+import { isObjectIdString } from "@/lib/objectId";
 const ADMIN_EMAILS = (process.env.ADMIN_EMAILS ?? "").split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
-
-const IS_DEV =
-  process.env.NODE_ENV !== "production" || process.env.ENABLE_DEV_LOGIN === "true";
-
-export { IS_DEV };
 
 const microsoftConfigured = Boolean(
   process.env.AUTH_MICROSOFT_ENTRA_ID_ID &&
@@ -15,13 +16,21 @@ const microsoftConfigured = Boolean(
   process.env.AUTH_MICROSOFT_ENTRA_ID_ISSUER,
 );
 
-function emailToName(email: string): string {
-  return email.split("@")[0]
-    .split(".")
-    .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
-    .join(" ");
-}
+async function normalizeTokenUserId(token: {
+  sub?: string;
+  email?: string | null;
+  name?: string | null;
+}) {
+  const email = token.email?.toLowerCase();
+  if (!email) return;
 
+  if (!isObjectIdString(token.sub)) {
+    const dbUser = await findOrCreateUserByEmail(email, token.name ?? undefined);
+    token.sub = dbUser.id;
+    token.email = dbUser.email;
+    token.name = dbUser.name;
+  }
+}
 export const { handlers, auth, signIn, signOut } = NextAuth({
   trustHost: true,
   providers: [
@@ -34,43 +43,80 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           }),
         ]
       : []),
-    ...(IS_DEV
-      ? [
-          Credentials({
-            id: "dev",
-            name: "Dev Login",
-            credentials: { email: { type: "email" } },
-            authorize(credentials) {
-              const email = (credentials?.email as string)?.trim().toLowerCase();
-              if (!email || !email.includes("@")) return null;
-              const name = emailToName(email);
-              const isAdmin = ADMIN_EMAILS.includes(email);
-              return { id: email, email, name, isAdmin };
-            },
-          }),
-        ]
-      : []),
+    Credentials({
+      id: "credentials",
+      name: "E-mail e senha",
+      credentials: {
+        email: { label: "E-mail", type: "email" },
+        password: { label: "Senha", type: "password" },
+      },
+      async authorize(credentials) {
+        const email = (credentials?.email as string)?.trim().toLowerCase();
+        const password = credentials?.password as string;
+        if (!email || !password) return null;
+
+        const user = await verifyUserCredentials(email, password);
+        if (!user) return null;
+
+        await ensureUserSettings(user.id, user.email, user.name);
+
+        return {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          isAdmin: ADMIN_EMAILS.includes(user.email.toLowerCase()),
+        };
+      },
+    }),
   ],
   callbacks: {
-    jwt({ token, user, account, profile }) {
-      if (account?.provider === "dev" && user) {
-        token.isAdmin = (user as any).isAdmin ?? false;
+    async jwt({ token, user, account, profile }) {
+      if (account?.provider === "credentials" && user) {
+        token.sub = user.id;
+        token.email = user.email;
+        token.name = user.name;
+        token.isAdmin = (user as { isAdmin?: boolean }).isAdmin ?? false;
+        await normalizeTokenUserId(token);
+        return token;
+      }
+      if (account?.provider === "microsoft-entra-id" && profile) {
+        const email = (
+          (profile as { email?: string; preferred_username?: string }).email
+          ?? (profile as { preferred_username?: string }).preferred_username
+          ?? token.email
+        ) as string;
+
+        if (email) {
+          const normalized = email.toLowerCase();
+          const name = profile.name ?? emailToName(normalized);
+          const dbUser = await findOrCreateUserByEmail(normalized, name);
+          token.sub = dbUser.id;
+          token.email = dbUser.email;
+          token.name = dbUser.name;
+          token.isAdmin = ADMIN_EMAILS.includes(normalized);
+        }
+        await normalizeTokenUserId(token);
         return token;
       }
       if (profile) {
-        token.email = ((profile as any).email ?? (profile as any).preferred_username ?? token.email) as string;
+        token.email = ((profile as { email?: string; preferred_username?: string }).email
+          ?? (profile as { preferred_username?: string }).preferred_username
+          ?? token.email) as string;
         token.name = profile.name ?? token.name;
       }
+
       if (token.email) {
         token.isAdmin = ADMIN_EMAILS.includes((token.email as string).toLowerCase());
       }
-      return token;
-    },
-    session({ session, token }) {
+
+      await normalizeTokenUserId(token);
+      return token;    },
+    async session({ session, token }) {
       if (session.user) {
+        session.user.id = token.sub as string;
         session.user.email = token.email as string;
-        session.user.name = token.name as string;
-        (session.user as any).isAdmin = token.isAdmin as boolean;
+        session.user.name = (token.name as string) ?? emailToName(token.email as string);
+        (session.user as { isAdmin?: boolean }).isAdmin = token.isAdmin as boolean;
       }
       return session;
     },

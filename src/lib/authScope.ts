@@ -1,26 +1,33 @@
+import { ObjectId } from "mongodb";
 import { getUserSettingsCollection } from "@/lib/mongodb";
 
-export async function getSubordinateEmails(managerEmail: string): Promise<string[]> {
+export async function getSubordinateUserIds(managerEmail: string): Promise<string[]> {
   const collection = await getUserSettingsCollection();
-  const docs = await collection.find({ managerEmail: managerEmail.toLowerCase() }).toArray();
-  return docs.map((d) => d._id.toString());
+  const normalized = managerEmail.trim().toLowerCase();
+  const docs = await collection
+    .find({ managerEmail: normalized, email: { $ne: normalized } })
+    .toArray();
+
+  return docs.map((d) => (d.userId as ObjectId).toHexString());
 }
 
-export async function getTaskVisibilityQuery(email: string, isAdmin: boolean) {
+export async function getTaskVisibilityQuery(
+  userId: string,
+  managerEmail: string,
+  isAdmin: boolean,
+) {
   if (isAdmin) return {};
 
-  const normalized = email.toLowerCase();
-  const subordinates = await getSubordinateEmails(normalized);
+  const subordinates = await getSubordinateUserIds(managerEmail);
 
-  // Líder de equipe: vê apenas tarefas dos subordinados (não as próprias)
   if (subordinates.length > 0) {
-    return { assignedTo: { $in: subordinates } };
+    return { assignedUserId: { $in: subordinates.map((id) => new ObjectId(id)) } };
   }
 
-  return { assignedTo: normalized };
+  return { assignedUserId: new ObjectId(userId) };
 }
 
-export async function isTeamLeader(email: string): Promise<boolean> {
-  const subordinates = await getSubordinateEmails(email.toLowerCase());
+export async function isTeamLeader(managerEmail: string): Promise<boolean> {
+  const subordinates = await getSubordinateUserIds(managerEmail);
   return subordinates.length > 0;
 }

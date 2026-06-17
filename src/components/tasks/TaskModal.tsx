@@ -9,10 +9,10 @@ import { useProjectsQuery } from "@/hooks/useProjects";
 
 interface Props {
   task?: Task | null;
-  userEmail: string;
+  userId: string;
   userName: string;
   isAdmin: boolean;
-  users: { email: string; name: string }[];
+  users: { id: string; email: string; name: string }[];
   onClose: () => void;
 }
 
@@ -54,7 +54,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 const INPUT = "w-full border border-surface-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500";
 const SELECT = `${INPUT} bg-white`;
 
-export default function TaskModal({ task, userEmail, userName, isAdmin, users, onClose }: Props) {
+export default function TaskModal({ task, userId, userName, isAdmin, users, onClose }: Props) {
   const create = useCreateTask();
   const update = useUpdateTask();
   const { data: projects = [] } = useProjectsQuery();
@@ -73,15 +73,15 @@ export default function TaskModal({ task, userEmail, userName, isAdmin, users, o
   const [tempoEstimado, setTempoEstimado] = useState<string>(task?.tempoEstimado?.toString() ?? "");
   const [tempoPrevisto, setTempoPrevisto] = useState<string>(task?.tempoPrevisto?.toString() ?? "");
   const [progress, setProgress] = useState(task?.progress ?? 0);
-  const [assignedTo, setAssignedTo] = useState(task?.assignedTo ?? userEmail);
+  const [assignedUserId, setAssignedUserId] = useState(task?.assignedUserId ?? userId);
   const [assignedToName, setAssignedToName] = useState(task?.assignedToName ?? userName);
   const [subtasks, setSubtasks] = useState<Subtask[]>(task?.subtasks ?? []);
   const [newSubtitle, setNewSubtitle] = useState("");
 
   useEffect(() => {
-    const u = users.find((u) => u.email === assignedTo);
+    const u = users.find((u) => u.id === assignedUserId);
     if (u) setAssignedToName(u.name);
-  }, [assignedTo, users]);
+  }, [assignedUserId, users]);
 
   function addSubtask() {
     if (!newSubtitle.trim()) return;
@@ -118,7 +118,7 @@ export default function TaskModal({ task, userEmail, userName, isAdmin, users, o
       tempoEstimado: tempoEstimado ? Number(tempoEstimado) : undefined,
       tempoPrevisto: tempoPrevisto ? Number(tempoPrevisto) : undefined,
       progress,
-      assignedTo,
+      assignedUserId,
       assignedToName,
       subtasks,
     };
@@ -186,8 +186,8 @@ export default function TaskModal({ task, userEmail, userName, isAdmin, users, o
 
           {isAdmin && (
             <Field label="Responsável">
-              <select value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)} className={SELECT}>
-                {users.map((u) => <option key={u.email} value={u.email}>{u.name}</option>)}
+              <select value={assignedUserId} onChange={(e) => setAssignedUserId(e.target.value)} className={SELECT}>
+                {users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
               </select>
             </Field>
           )}

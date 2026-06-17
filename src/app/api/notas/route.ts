@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { ObjectId } from "mongodb";
 import { auth } from "@/auth";
 import { getNotasCollection, serializeNote } from "@/lib/mongodb";
 
@@ -9,13 +10,13 @@ function generateId() {
 export async function GET() {
   try {
     const session = await auth();
-    if (!session?.user?.email) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const collection = await getNotasCollection();
     const docs = await collection
-      .find({ userEmail: session.user.email })
+      .find({ userId: new ObjectId(session.user.id) })
       .sort({ data: -1, createdAt: -1 })
       .toArray();
 
@@ -29,7 +30,7 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const session = await auth();
-    if (!session?.user?.email) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -40,13 +41,13 @@ export async function POST(req: NextRequest) {
     const nota = {
       _id: id,
       id,
+      userId: new ObjectId(session.user.id),
       titulo: body.titulo ?? "",
       conteudo: body.conteudo ?? "",
       tipo: body.tipo ?? "anotacao",
       tarefaId: body.tarefaId ?? undefined,
       tarefaTitulo: body.tarefaTitulo ?? undefined,
       data: body.data ?? now,
-      userEmail: session.user.email,
       createdAt: now,
       updatedAt: now,
     };

@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, Trash2, Loader2, Users, FolderKanban, Save, Mail, PenLine } from "lucide-react";
+import { Plus, Trash2, Loader2, Users, FolderKanban, Save, Mail, PenLine, Lock } from "lucide-react";
 import { useProjectsQuery, useCreateProject, useDeleteProject } from "@/hooks/useProjects";
-import { useSettingsQuery, useUpdateSettings } from "@/hooks/useSettings";
+import { useSettingsQuery, useUpdateSettings, useChangePassword } from "@/hooks/useSettings";
 
 interface Props {
   userEmail: string;
@@ -16,11 +16,15 @@ export default function ConfigClient({ userEmail, userName }: Props) {
   const createProject = useCreateProject();
   const deleteProject = useDeleteProject();
   const updateSettings = useUpdateSettings();
+  const changePassword = useChangePassword();
 
   const [newProject, setNewProject] = useState("");
   const [managerEmail, setManagerEmail] = useState("");
   const [managerName, setManagerName] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [saved, setSaved] = useState(false);
+  const [passwordSaved, setPasswordSaved] = useState(false);
 
   useEffect(() => {
     if (settings) {
@@ -47,14 +51,75 @@ export default function ConfigClient({ userEmail, userName }: Props) {
     setTimeout(() => setSaved(false), 2500);
   }
 
+  async function handleChangePassword(e: React.FormEvent) {
+    e.preventDefault();
+    await changePassword.mutateAsync({
+      newPassword,
+      confirmPassword,
+    });
+    setNewPassword("");
+    setConfirmPassword("");
+    setPasswordSaved(true);
+    setTimeout(() => setPasswordSaved(false), 2500);
+  }
+
   return (
     <div className="p-4 md:p-6 max-w-[900px] mx-auto space-y-8">
       <div>
         <h1 className="text-xl font-bold text-surface-900">Configurações</h1>
         <p className="text-sm text-surface-400 mt-0.5">
-          Gerencie projetos e defina seu gestor para os reports operacionais.
+          Gerencie sua conta, projetos e defina seu gestor para os reports operacionais.
         </p>
       </div>
+
+      {/* Senha */}
+      {settings?.hasPassword && (
+        <section className="bg-white rounded-xl border border-surface-200 p-5 space-y-4">
+          <div className="flex items-center gap-2">
+            <Lock size={16} className="text-brand-500" />
+            <h2 className="text-sm font-bold text-surface-700">Alterar senha</h2>
+          </div>
+          <form onSubmit={handleChangePassword} className="space-y-3 max-w-md">
+            <div>
+              <label className="text-xs font-medium text-surface-600 block mb-1.5">Nova senha</label>
+              <input
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                autoComplete="new-password"
+                minLength={8}
+                required
+                className="w-full px-3 py-2 border border-surface-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/30"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-surface-600 block mb-1.5">Confirmar nova senha</label>
+              <input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                autoComplete="new-password"
+                required
+                className="w-full px-3 py-2 border border-surface-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/30"
+              />
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                type="submit"
+                disabled={changePassword.isPending}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white rounded-lg text-sm font-medium disabled:opacity-60"
+              >
+                {changePassword.isPending ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                Salvar nova senha
+              </button>
+              {passwordSaved && <span className="text-xs text-brand-600 font-medium">Senha alterada!</span>}
+              {changePassword.isError && (
+                <span className="text-xs text-red-500">{(changePassword.error as Error).message}</span>
+              )}
+            </div>
+          </form>
+        </section>
+      )}
 
       {/* Gestor */}
       <section className="bg-white rounded-xl border border-surface-200 p-5 space-y-4">
@@ -63,8 +128,8 @@ export default function ConfigClient({ userEmail, userName }: Props) {
           <h2 className="text-sm font-bold text-surface-700">Seu gestor</h2>
         </div>
         <p className="text-xs text-surface-500 leading-relaxed">
-          Informe o e-mail corporativo do seu gestor. Quando ele entrar na plataforma, verá suas tarefas,
-          indicadores e relatórios automaticamente.
+          Informe o e-mail corporativo do seu gestor. Não é necessário que ele já tenha conta —
+          quando entrar na plataforma, verá suas tarefas e relatórios automaticamente.
         </p>
 
         {loadingSettings ? (

@@ -15,7 +15,7 @@ export interface Task {
   description?: string;
   status: TaskStatus;
   priority: TaskPriority;
-  assignedTo: string;
+  assignedUserId: string;
   assignedToName: string;
   projeto?: string;
   category?: string;

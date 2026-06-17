@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
-import { auth, IS_DEV } from "@/auth";
+import { ObjectId } from "mongodb";
+import { auth } from "@/auth";
 import { getTasksCollection } from "@/lib/mongodb";
+import { findUserByEmail } from "@/lib/users";
 
 const MARCUS = {
   email: "marcus.silva@gruporoncador.com.br",
@@ -225,15 +227,24 @@ export async function POST() {
     }
 
     const isAdmin = (session.user as any).isAdmin ?? false;
-    if (!isAdmin && !IS_DEV) {
+    if (!isAdmin) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const marcus = await findUserByEmail(MARCUS.email);
+    if (!marcus) {
+      return NextResponse.json({ error: "Usuário admin não encontrado. Execute o seed de admin primeiro." }, { status: 400 });
     }
 
     const collection = await getTasksCollection();
 
     await collection.deleteMany({});
 
-    const docs = SEED_TASKS.map((t) => ({ _id: t.id, ...t }));
+    const docs = SEED_TASKS.map(({ id: _legacyId, assignedTo: _assignedTo, ...t }) => ({
+      _id: new ObjectId(),
+      ...t,
+      assignedUserId: new ObjectId(marcus.id),
+    }));
     await collection.insertMany(docs as any);
 
     return NextResponse.json({ ok: true, inserted: SEED_TASKS.length });

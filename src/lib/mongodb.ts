@@ -1,8 +1,9 @@
-import { MongoClient, Db, Collection } from "mongodb";
+import { MongoClient, Db, Collection, ObjectId } from "mongodb";
 import type { Task } from "@/types";
 import type { SystemObservation } from "@/types/system";
 import type { Note } from "@/types/note";
 import type { Project, UserSettings } from "@/types/project";
+import { toObjectId } from "@/lib/objectId";
 
 const uri = process.env.MONGODB_URI!;
 
@@ -34,9 +35,33 @@ export async function getSystemsObsCollection(): Promise<Collection> {
   return db.collection("systems_obs");
 }
 
+function toIdString(value: ObjectId | string): string {
+  return value instanceof ObjectId ? value.toHexString() : String(value);
+}
+
+/** Resolve task lookup by ObjectId hex. */
+export function taskByIdFilter(id: string): { _id: ObjectId } | null {
+  const objectId = toObjectId(id);
+  if (!objectId) return null;
+  return { _id: objectId };
+}
+
+export function newTaskObjectId(): ObjectId {
+  return new ObjectId();
+}
+
 export function serializeTask(doc: any): Task {
-  const { _id, ...rest } = doc;
-  return { ...rest, id: _id.toString() } as Task;
+  const { _id, id: _docId, assignedUserId, assignedTo, ...rest } = doc;
+  const userId = assignedUserId
+    ? toIdString(assignedUserId)
+    : assignedTo
+      ? String(assignedTo)
+      : "";
+  return {
+    ...rest,
+    id: toIdString(_id),
+    assignedUserId: userId,
+  } as Task;
 }
 
 export function serializeSystemObs(doc: any): SystemObservation {
@@ -60,16 +85,28 @@ export async function getUserSettingsCollection(): Promise<Collection> {
 }
 
 export function serializeProject(doc: any): Project {
-  const { _id, ...rest } = doc;
-  return { ...rest, id: _id.toString() } as Project;
+  const { _id, createdByUserId, ...rest } = doc;
+  return {
+    ...rest,
+    id: _id.toString(),
+    createdByUserId: createdByUserId ? toIdString(createdByUserId) : undefined,
+  } as Project;
 }
 
 export function serializeUserSettings(doc: any): UserSettings {
-  const { _id, ...rest } = doc;
-  return { ...rest, email: _id.toString() } as UserSettings;
+  const { _id, userId, managerId: _managerId, email, ...rest } = doc;
+  return {
+    ...rest,
+    userId: userId ? toIdString(userId) : toIdString(_id),
+    email: email ?? "",
+  } as UserSettings;
 }
 
 export function serializeNote(doc: any): Note {
-  const { _id, ...rest } = doc;
-  return { ...rest, id: _id.toString() } as Note;
+  const { _id, userId, userEmail, ...rest } = doc;
+  return {
+    ...rest,
+    id: _id.toString(),
+    userId: userId ? toIdString(userId) : userEmail ? String(userEmail) : "",
+  } as Note;
 }

@@ -6,7 +6,7 @@ import type { TaskStatus, TaskPriority } from "@/types";
 export interface TaskFilters {
   status: TaskStatus[];
   priority: TaskPriority[];
-  assignedTo: string;
+  assignedUserId: string;
   search: string;
 }
 
@@ -19,7 +19,7 @@ interface TaskUIStore {
 export const DEFAULT_FILTERS: TaskFilters = {
   status: ["pendente", "em_andamento"],
   priority: [],
-  assignedTo: "",
+  assignedUserId: "",
   search: "",
 };
 

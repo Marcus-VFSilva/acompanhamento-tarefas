@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
+import { ObjectId } from "mongodb";
 import { auth } from "@/auth";
 import { getNotasCollection, serializeNote } from "@/lib/mongodb";
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await auth();
-    if (!session?.user?.email) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -20,9 +21,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
     const collection = await getNotasCollection();
     const result = await collection.findOneAndUpdate(
-      { id, userEmail: session.user.email },
+      { id, userId: new ObjectId(session.user.id) },
       { $set: updates },
-      { returnDocument: "after" }
+      { returnDocument: "after" },
     );
 
     if (!result) {
@@ -39,13 +40,13 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await auth();
-    if (!session?.user?.email) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const { id } = await params;
     const collection = await getNotasCollection();
-    await collection.deleteOne({ id, userEmail: session.user.email });
+    await collection.deleteOne({ id, userId: new ObjectId(session.user.id) });
 
     return NextResponse.json({ ok: true });
   } catch (err) {

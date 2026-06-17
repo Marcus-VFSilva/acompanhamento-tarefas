@@ -3,10 +3,10 @@ import type { Task } from "@/types";
 export function buildCollaboratorData(tasks: Task[]) {
   const map = new Map<string, { name: string; pendente: number; em_andamento: number; concluido: number; total: number }>();
   tasks.forEach((t) => {
-    if (!map.has(t.assignedTo)) {
-      map.set(t.assignedTo, { name: t.assignedToName, pendente: 0, em_andamento: 0, concluido: 0, total: 0 });
+    if (!map.has(t.assignedUserId)) {
+      map.set(t.assignedUserId, { name: t.assignedToName, pendente: 0, em_andamento: 0, concluido: 0, total: 0 });
     }
-    const c = map.get(t.assignedTo)!;
+    const c = map.get(t.assignedUserId)!;
     c.total++;
     if (t.status === "pendente") c.pendente++;
     else if (t.status === "em_andamento") c.em_andamento++;
