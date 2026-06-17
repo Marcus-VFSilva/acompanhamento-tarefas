@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { getTasksCollection, serializeTask } from "@/lib/mongodb";
+import { getTaskVisibilityQuery, isTeamLeader } from "@/lib/authScope";
 import initialData from "@/data/tasks.json";
 
 function generateId() {
@@ -31,7 +32,7 @@ export async function GET() {
 
     await seedIfEmpty(collection);
 
-    const query = isAdmin ? {} : { assignedTo: session.user.email };
+    const query = await getTaskVisibilityQuery(session.user.email, isAdmin);
     const docs = await collection.find(query).sort({ updatedAt: -1 }).toArray();
 
     return NextResponse.json(docs.map(serializeTask));
@@ -48,6 +49,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const isAdmin = (session.user as any).isAdmin ?? false;
+    const collection = await getTasksCollection();
+
+    await seedIfEmpty(collection);
+
+    const leader = await isTeamLeader(session.user.email);
+    if (leader && !isAdmin) {
+      return NextResponse.json({ error: "Líderes não podem criar tarefas pela visão de equipe" }, { status: 403 });
+    }
+
     const body = await req.json();
     const id = generateId();
     const today = now();
@@ -62,7 +73,6 @@ export async function POST(req: NextRequest) {
       updatedAt: today,
     };
 
-    const collection = await getTasksCollection();
     await collection.insertOne(task as any);
 
     return NextResponse.json(serializeTask(task), { status: 201 });

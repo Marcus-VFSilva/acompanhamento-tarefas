@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { useTasksQuery } from "@/hooks/useTasks";
+import { useUserRole } from "@/hooks/useUserRole";
 import { useNotasQuery, useCreateNota, useUpdateNota, useDeleteNota } from "@/hooks/useNotas";
 import { useSistemasQuery } from "@/hooks/useSistemas";
 import DashboardCharts from "@/components/dashboard/DashboardCharts";
@@ -11,6 +12,7 @@ import {
   Bell, CalendarDays, BookOpen,
 } from "lucide-react";
 import Link from "next/link";
+import ExportButtons from "@/components/export/ExportButtons";
 import type { Note, NoteType } from "@/types/note";
 import { NOTE_TYPE_LABEL, NOTE_TYPE_COLOR, DIAS_SEMANA } from "@/types/note";
 
@@ -356,9 +358,11 @@ function NotaDrawer({
 // ── Main ──────────────────────────────────────────────────────────────
 export default function DashboardClient({ isAdmin, userEmail }: Props) {
   const { data: allTasks = [], isLoading } = useTasksQuery();
+  const { isTeamLeader, canViewTeam, teamLabel } = useUserRole(isAdmin);
   const { data: notas = [] } = useNotasQuery();
   const { data: sistemas = [] } = useSistemasQuery();
   const deleteNota = useDeleteNota();
+  const exportRef = useRef<HTMLDivElement>(null);
 
   const [notaDrawer, setNotaDrawer] = useState<Note | null | "new">(null);
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
@@ -366,7 +370,7 @@ export default function DashboardClient({ isAdmin, userEmail }: Props) {
   const todayStr = getTodayStr();
   const todayDow = getTodayDow();
 
-  const visibleTasks = isAdmin ? allTasks : allTasks.filter((t) => t.assignedTo === userEmail);
+  const visibleTasks = allTasks;
 
   const total = visibleTasks.length;
   const pending = visibleTasks.filter((t) => t.status === "pendente").length;
@@ -436,19 +440,27 @@ export default function DashboardClient({ isAdmin, userEmail }: Props) {
 
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-xl font-bold text-surface-900">Minha Visão Geral</h1>
-        <p className="text-sm text-surface-400 mt-0.5">
-          {new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-bold text-surface-900">
+            {isTeamLeader ? "Painel da Equipe" : canViewTeam ? "Visão Geral" : "Minha Visão Geral"}
+          </h1>
+          <p className="text-sm text-surface-400 mt-0.5">
+            {isTeamLeader && teamLabel && `${teamLabel} · `}
+            {new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+          </p>
+        </div>
+        <ExportButtons tasks={visibleTasks} exportRef={exportRef} filenamePrefix="dashboard" />
       </div>
 
-      {/* Agenda do dia — sempre visível (mostra "dia livre" se vazio) */}
-      <AgendaHoje notas={notasHoje} onEdit={(n) => setNotaDrawer(n)} />
+      <div ref={exportRef} className="space-y-6">
+
+      {/* Agenda do dia — oculta para líder (visão pessoal) */}
+      {!isTeamLeader && <AgendaHoje notas={notasHoje} onEdit={(n) => setNotaDrawer(n)} />}
 
       {/* Task KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
-        <MetricCard label="Total de tarefas" value={total} icon={ListTodo} color="bg-surface-600" />
+        <MetricCard label={isTeamLeader ? "Total da equipe" : "Total de tarefas"} value={total} icon={ListTodo} color="bg-surface-600" />
         <MetricCard label="Pendentes" value={pending} icon={AlertCircle} color="bg-surface-400" />
         <MetricCard label="Em andamento" value={inProgress} icon={Clock} color="bg-blue-500" />
         <MetricCard label="Concluídas" value={done} icon={CheckCircle2} color="bg-brand-500" sub={`${avgProgress}% de progresso médio`} />
@@ -483,9 +495,9 @@ export default function DashboardClient({ isAdmin, userEmail }: Props) {
         </Link>
       )}
 
-      {/* Charts (admin) or progress bar (personal) */}
-      {isAdmin && <DashboardCharts tasks={allTasks} />}
-      {!isAdmin && (
+      {/* Charts (gestor/admin) or progress bar (personal) */}
+      {canViewTeam && <DashboardCharts tasks={visibleTasks} showCollaboratorChart={isTeamLeader} />}
+      {!canViewTeam && (
         <div className="bg-white rounded-xl border border-surface-200 p-5">
           <div className="flex items-center gap-2 mb-3">
             <TrendingUp size={16} className="text-brand-500" />
@@ -499,12 +511,14 @@ export default function DashboardClient({ isAdmin, userEmail }: Props) {
       )}
 
       {/* Two-column: recent tasks + notes */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className={`grid grid-cols-1 ${isTeamLeader ? "" : "lg:grid-cols-2"} gap-4`}>
 
         {/* Recent tasks — with linked-note count */}
         <div className="bg-white rounded-xl border border-surface-200">
           <div className="flex items-center justify-between px-5 py-4 border-b border-surface-100">
-            <h3 className="text-sm font-semibold text-surface-700">Atividade recente</h3>
+            <h3 className="text-sm font-semibold text-surface-700">
+              {isTeamLeader ? "Atividade recente da equipe" : "Atividade recente"}
+            </h3>
             <Link href="/tarefas" className="text-xs text-brand-500 hover:text-brand-600 font-medium">Ver todas →</Link>
           </div>
           <div className="divide-y divide-surface-50">
@@ -520,6 +534,9 @@ export default function DashboardClient({ isAdmin, userEmail }: Props) {
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-surface-800 truncate">{task.title}</p>
                         <div className="flex items-center gap-2 mt-0.5">
+                          {canViewTeam && (
+                            <p className="text-xs text-brand-600 font-medium">{task.assignedToName}</p>
+                          )}
                           <p className="text-xs text-surface-400">Atualizado {task.updatedAt}</p>
                           {taskNotas.length > 0 && (
                             <button
@@ -587,7 +604,8 @@ export default function DashboardClient({ isAdmin, userEmail }: Props) {
           </div>
         </div>
 
-        {/* Notes column — ordenadas */}
+        {/* Notes column — oculta para líder de equipe */}
+        {!isTeamLeader && (
         <div className="bg-white rounded-xl border border-surface-200">
           <div className="flex items-center justify-between px-5 py-4 border-b border-surface-100">
             <h3 className="text-sm font-semibold text-surface-700">Anotações</h3>
@@ -670,6 +688,8 @@ export default function DashboardClient({ isAdmin, userEmail }: Props) {
             )}
           </div>
         </div>
+        )}
+      </div>
       </div>
 
       {/* Note drawer */}

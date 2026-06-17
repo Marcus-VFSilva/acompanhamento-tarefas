@@ -1,11 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { getTasksCollection, serializeTask } from "@/lib/mongodb";
+import { isTeamLeader } from "@/lib/authScope";
 
 type Params = { params: Promise<{ id: string }> };
 
 function now() {
   return new Date().toISOString().split("T")[0];
+}
+
+async function assertCanModifyTask(sessionEmail: string, isAdmin: boolean, assignedTo: string) {
+  if (isAdmin) return null;
+  if (await isTeamLeader(sessionEmail)) {
+    return NextResponse.json({ error: "Líderes podem apenas visualizar tarefas da equipe" }, { status: 403 });
+  }
+  if (assignedTo.toLowerCase() !== sessionEmail.toLowerCase()) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  return null;
 }
 
 export async function PUT(req: NextRequest, { params }: Params) {
@@ -25,9 +37,8 @@ export async function PUT(req: NextRequest, { params }: Params) {
     }
 
     const isAdmin = (session.user as any).isAdmin ?? false;
-    if (!isAdmin && existing.assignedTo !== session.user.email) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const denied = await assertCanModifyTask(session.user.email, isAdmin, existing.assignedTo);
+    if (denied) return denied;
 
     const { id: _id, _id: __id, createdAt, ...updates } = body;
     const updatedDoc = { ...updates, updatedAt: now() };
@@ -58,9 +69,8 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
     }
 
     const isAdmin = (session.user as any).isAdmin ?? false;
-    if (!isAdmin && existing.assignedTo !== session.user.email) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const denied = await assertCanModifyTask(session.user.email, isAdmin, existing.assignedTo);
+    if (denied) return denied;
 
     await collection.deleteOne({ _id: id as any });
     return NextResponse.json({ success: true });

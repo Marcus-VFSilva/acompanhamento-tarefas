@@ -2,6 +2,7 @@ import { MongoClient, Db, Collection } from "mongodb";
 import type { Task } from "@/types";
 import type { SystemObservation } from "@/types/system";
 import type { Note } from "@/types/note";
+import type { Project, UserSettings } from "@/types/project";
 
 const uri = process.env.MONGODB_URI!;
 
@@ -46,6 +47,26 @@ export function serializeSystemObs(doc: any): SystemObservation {
 export async function getNotasCollection(): Promise<Collection> {
   const db = await getDb();
   return db.collection("notas");
+}
+
+export async function getProjectsCollection(): Promise<Collection> {
+  const db = await getDb();
+  return db.collection("projects");
+}
+
+export async function getUserSettingsCollection(): Promise<Collection> {
+  const db = await getDb();
+  return db.collection("user_settings");
+}
+
+export function serializeProject(doc: any): Project {
+  const { _id, ...rest } = doc;
+  return { ...rest, id: _id.toString() } as Project;
+}
+
+export function serializeUserSettings(doc: any): UserSettings {
+  const { _id, ...rest } = doc;
+  return { ...rest, email: _id.toString() } as UserSettings;
 }
 
 export function serializeNote(doc: any): Note {

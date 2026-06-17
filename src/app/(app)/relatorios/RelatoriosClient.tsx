@@ -1,13 +1,16 @@
 "use client";
 
+import { useRef } from "react";
 import { useTasksQuery } from "@/hooks/useTasks";
+import { useUserRole } from "@/hooks/useUserRole";
+import { buildCollaboratorData, buildProjectData } from "@/lib/reportMetrics";
 import { useSistemasQuery } from "@/hooks/useSistemas";
 import {
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip,
   ResponsiveContainer, Legend, CartesianGrid,
 } from "recharts";
-import { Download, CheckCircle2, Clock, ListTodo, AlertCircle, XCircle, Timer, Server } from "lucide-react";
-import { exportToExcel } from "@/lib/exportExcel";
+import { CheckCircle2, Clock, ListTodo, AlertCircle, XCircle, Timer, Server } from "lucide-react";
+import ExportButtons from "@/components/export/ExportButtons";
 import type { Task } from "@/types";
 import { StatusBadge, PriorityBadge } from "@/components/tasks/StatusBadge";
 import { STATUS_SISTEMA } from "@/types/system";
@@ -44,21 +47,12 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
   return <h2 className="text-sm font-bold text-surface-700">{children}</h2>;
 }
 
-function buildProjectData(tasks: Task[]) {
-  const map = new Map<string, { pendente: number; em_andamento: number; concluido: number }>();
-  tasks.forEach((t) => {
-    const key = t.projeto || "Sem projeto";
-    if (!map.has(key)) map.set(key, { pendente: 0, em_andamento: 0, concluido: 0 });
-    const p = map.get(key)!;
-    if (t.status !== "cancelado") p[t.status as keyof typeof p]++;
-  });
-  return Array.from(map.entries()).map(([name, v]) => ({ name, ...v }));
-}
-
-export default function RelatoriosClient({ isAdmin, userEmail }: Props) {
+export default function RelatoriosClient({ isAdmin }: Props) {
+  const exportRef = useRef<HTMLDivElement>(null);
   const { data: allTasks = [] } = useTasksQuery();
+  const { isTeamLeader, canViewTeam, teamLabel } = useUserRole(isAdmin);
   const { data: sistemas = [] } = useSistemasQuery();
-  const tasks = isAdmin ? allTasks : allTasks.filter((t) => t.assignedTo === userEmail);
+  const tasks = allTasks;
 
   const total = tasks.length;
   const concluido = tasks.filter((t) => t.status === "concluido").length;
@@ -78,6 +72,7 @@ export default function RelatoriosClient({ isAdmin, userEmail }: Props) {
   ].filter((d) => d.value > 0);
 
   const projectData = buildProjectData(tasks);
+  const collaboratorData = buildCollaboratorData(tasks);
 
   const sistemaStatusData = Object.entries(STATUS_SISTEMA).map(([key, val]) => ({
     name: val.label,
@@ -99,20 +94,18 @@ export default function RelatoriosClient({ isAdmin, userEmail }: Props) {
       {/* Header */}
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-surface-900">Relatórios</h1>
+          <h1 className="text-xl font-bold text-surface-900">
+            {isTeamLeader ? "Relatórios da Equipe" : "Relatórios"}
+          </h1>
           <p className="text-sm text-surface-400 mt-0.5">
-            {"Seus indicadores de desempenho"}
-            {" · "}gerado em {new Date().toLocaleDateString("pt-BR")}
+            {isTeamLeader && teamLabel ? `${teamLabel} · ` : canViewTeam ? "Indicadores consolidados · " : "Seus indicadores · "}
+            gerado em {new Date().toLocaleDateString("pt-BR")}
           </p>
         </div>
-        <button
-          onClick={() => exportToExcel(tasks)}
-          className="inline-flex items-center gap-2 px-4 py-2.5 bg-brand-500 hover:bg-brand-600 text-white rounded-xl text-sm font-medium transition-colors shrink-0"
-        >
-          <Download size={15} />
-          Exportar Excel
-        </button>
+        <ExportButtons tasks={tasks} exportRef={exportRef} filenamePrefix="relatorio" />
       </div>
+
+      <div ref={exportRef} className="space-y-6">
 
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -156,6 +149,24 @@ export default function RelatoriosClient({ isAdmin, userEmail }: Props) {
           </ResponsiveContainer>
         </div>
       </div>
+
+      {isTeamLeader && collaboratorData.length > 0 && (
+        <div className="bg-white rounded-xl border border-surface-200 p-5">
+          <SectionTitle>Tarefas por colaborador</SectionTitle>
+          <ResponsiveContainer width="100%" height={Math.max(240, collaboratorData.length * 52)} className="mt-3">
+            <BarChart data={collaboratorData} layout="vertical" barSize={14}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
+              <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
+              <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={120} />
+              <Tooltip />
+              <Legend iconSize={8} />
+              <Bar dataKey="pendente" name="Pendente" fill="#94a3b8" stackId="a" />
+              <Bar dataKey="em_andamento" name="Em andamento" fill="#3b82f6" stackId="a" />
+              <Bar dataKey="concluido" name="Concluído" fill="#044a42" stackId="a" radius={[0, 4, 4, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
 
       {/* Charts row 2 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -258,6 +269,7 @@ export default function RelatoriosClient({ isAdmin, userEmail }: Props) {
             </tbody>
           </table>
         </div>
+      </div>
       </div>
     </div>
   );

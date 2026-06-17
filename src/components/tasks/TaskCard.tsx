@@ -10,9 +10,10 @@ interface Props {
   task: Task;
   onEdit: (task: Task) => void;
   canDelete?: boolean;
+  readOnly?: boolean;
 }
 
-export default function TaskCard({ task, onEdit, canDelete }: Props) {
+export default function TaskCard({ task, onEdit, canDelete, readOnly = false }: Props) {
   const [expanded, setExpanded] = useState(false);
   const updateSubtask = useUpdateSubtask();
   const updateTask = useUpdateTask();
@@ -57,6 +58,8 @@ export default function TaskCard({ task, onEdit, canDelete }: Props) {
           </div>
 
           <div className="flex items-center gap-1 shrink-0">
+            {!readOnly && (
+            <>
             <button
               onClick={() => onEdit(task)}
               className="p-1.5 rounded-lg hover:bg-surface-100 text-surface-400 hover:text-surface-600 transition-colors"
@@ -71,6 +74,16 @@ export default function TaskCard({ task, onEdit, canDelete }: Props) {
                 title="Excluir"
               >
                 <Trash2 size={14} />
+              </button>
+            )}
+            </>
+            )}
+            {readOnly && (
+              <button
+                onClick={() => onEdit(task)}
+                className="px-2 py-1 text-[10px] font-medium text-brand-600 bg-brand-50 rounded-md hover:bg-brand-100 transition-colors"
+              >
+                Ver detalhes
               </button>
             )}
           </div>
@@ -122,8 +135,8 @@ export default function TaskCard({ task, onEdit, canDelete }: Props) {
           {task.subtasks.map((sub) => (
             <div
               key={sub.id}
-              className="flex items-start gap-2.5 cursor-pointer group"
-              onClick={() => toggleSubtask(sub.id, sub.status)}
+              className={`flex items-start gap-2.5 group ${readOnly ? "" : "cursor-pointer"}`}
+              onClick={readOnly ? undefined : () => toggleSubtask(sub.id, sub.status)}
             >
               {sub.status === "concluido" ? (
                 <CheckSquare size={15} className="text-brand-500 shrink-0 mt-0.5" />

@@ -3,8 +3,9 @@
 import { useEffect, useState } from "react";
 import { X, Plus, Trash2 } from "lucide-react";
 import type { Task, TaskStatus, TaskPriority, Subtask } from "@/types";
-import { CATEGORIES, PROJECTS } from "@/types";
+import { CATEGORIES } from "@/types";
 import { useCreateTask, useUpdateTask } from "@/hooks/useTasks";
+import { useProjectsQuery } from "@/hooks/useProjects";
 
 interface Props {
   task?: Task | null;
@@ -56,6 +57,7 @@ const SELECT = `${INPUT} bg-white`;
 export default function TaskModal({ task, userEmail, userName, isAdmin, users, onClose }: Props) {
   const create = useCreateTask();
   const update = useUpdateTask();
+  const { data: projects = [] } = useProjectsQuery();
 
   const [title, setTitle] = useState(task?.title ?? "");
   const [description, setDescription] = useState(task?.description ?? "");
@@ -171,7 +173,7 @@ export default function TaskModal({ task, userEmail, userName, isAdmin, users, o
             <Field label="Projeto">
               <select value={projeto} onChange={(e) => setProjeto(e.target.value)} className={SELECT}>
                 <option value="">Sem projeto</option>
-                {PROJECTS.map((p) => <option key={p} value={p}>{p}</option>)}
+                {projects.map((p) => <option key={p.id} value={p.name}>{p.name}</option>)}
               </select>
             </Field>
             <Field label="Categoria">

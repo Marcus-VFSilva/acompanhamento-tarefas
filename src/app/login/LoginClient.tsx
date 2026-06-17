@@ -69,7 +69,6 @@ export default function LoginClient({ isDev }: Props) {
       return;
     }
 
-    await fetch("/api/tasks/seed", { method: "POST" });
     router.push("/");
   }
 

@@ -128,9 +128,11 @@ interface Props {
   selectedTaskId: string | null;
   onSelect: (task: Task) => void;
   canDeleteFn: (task: Task) => boolean;
+  readOnly?: boolean;
+  showAssignee?: boolean;
 }
 
-export default function TaskTable({ tasks, selectedTaskId, onSelect, canDeleteFn }: Props) {
+export default function TaskTable({ tasks, selectedTaskId, onSelect, canDeleteFn, readOnly = false, showAssignee = false }: Props) {
   const deleteTask = useDeleteTask();
   const updateTask = useUpdateTask();
   const { data: notas = [] } = useNotasQuery();
@@ -176,6 +178,7 @@ export default function TaskTable({ tasks, selectedTaskId, onSelect, canDeleteFn
             <tr className="bg-surface-50">
               {[
                 { label: "Título",         w: "min-w-[220px]" },
+                ...(showAssignee ? [{ label: "Colaborador", w: "min-w-[130px]" }] : []),
                 { label: "Status",         w: "min-w-[120px]" },
                 { label: "Prioridade",     w: "min-w-[90px]"  },
                 { label: "Projeto",        w: "min-w-[120px]" },
@@ -183,7 +186,7 @@ export default function TaskTable({ tasks, selectedTaskId, onSelect, canDeleteFn
                 { label: "Impeditivo",     w: "min-w-[160px]" },
                 { label: "Prazo",          w: "min-w-[90px]"  },
                 { label: "Progresso",      w: "min-w-[100px]" },
-                { label: "",               w: "min-w-[50px]"  },
+                ...(!readOnly ? [{ label: "", w: "min-w-[50px]" }] : []),
               ].map((c) => (
                 <th
                   key={c.label}
@@ -236,24 +239,38 @@ export default function TaskTable({ tasks, selectedTaskId, onSelect, canDeleteFn
                     </div>
                   </td>
 
+                  {showAssignee && (
+                    <td className="px-3 py-2.5 border-b border-surface-100 align-middle text-xs text-surface-700 font-medium whitespace-nowrap">
+                      {task.assignedToName}
+                    </td>
+                  )}
+
                   {/* Status — inline dropdown */}
                   <td className="px-3 py-2.5 border-b border-surface-100 align-middle">
+                    {readOnly ? (
+                      <StatusBadge status={task.status} />
+                    ) : (
                     <InlinePill
                       value={task.status}
                       options={STATUS_OPTIONS}
                       onChange={(v) => handleUpdate(task.id, { status: v })}
                       renderLabel={() => <StatusBadge status={task.status} />}
                     />
+                    )}
                   </td>
 
                   {/* Priority — inline dropdown */}
                   <td className="px-3 py-2.5 border-b border-surface-100 align-middle">
+                    {readOnly ? (
+                      <PriorityBadge priority={task.priority} />
+                    ) : (
                     <InlinePill
                       value={task.priority}
                       options={PRIORITY_OPTIONS}
                       onChange={(v) => handleUpdate(task.id, { priority: v })}
                       renderLabel={() => <PriorityBadge priority={task.priority} />}
                     />
+                    )}
                   </td>
 
                   {/* Projeto */}
@@ -266,10 +283,14 @@ export default function TaskTable({ tasks, selectedTaskId, onSelect, canDeleteFn
 
                   {/* Situação atual — inline editable */}
                   <td className="px-3 py-2.5 border-b border-surface-100 align-middle text-xs">
+                    {readOnly ? (
+                      <span className="text-surface-600">{task.situacaoAtual || "—"}</span>
+                    ) : (
                     <InlineTextCell
                       value={task.situacaoAtual}
                       onSave={(v) => handleUpdate(task.id, { situacaoAtual: v })}
                     />
+                    )}
                   </td>
 
                   {/* Impeditivo */}
@@ -291,12 +312,16 @@ export default function TaskTable({ tasks, selectedTaskId, onSelect, canDeleteFn
                     className="px-3 py-2.5 border-b border-surface-100 align-middle text-xs tabular-nums text-surface-600"
                     onClick={(e) => e.stopPropagation()}
                   >
+                    {readOnly ? (
+                      task.dueDate || "—"
+                    ) : (
                     <input
                       type="date"
                       defaultValue={task.dueDate ?? ""}
                       onChange={(e) => handleUpdate(task.id, { dueDate: e.target.value || undefined })}
                       className="text-xs border-none bg-transparent outline-none cursor-pointer text-surface-600 w-28"
                     />
+                    )}
                   </td>
 
                   {/* Progresso */}
@@ -310,6 +335,7 @@ export default function TaskTable({ tasks, selectedTaskId, onSelect, canDeleteFn
                   </td>
 
                   {/* Delete */}
+                  {!readOnly && (
                   <td className="px-2 py-2.5 border-b border-surface-100 align-middle" onClick={(e) => e.stopPropagation()}>
                     {canDeleteFn(task) && (
                       <button
@@ -321,6 +347,7 @@ export default function TaskTable({ tasks, selectedTaskId, onSelect, canDeleteFn
                       </button>
                     )}
                   </td>
+                  )}
                 </tr>
               );
             })}

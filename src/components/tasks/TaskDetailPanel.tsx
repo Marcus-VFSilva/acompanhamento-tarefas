@@ -1,13 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   X, ChevronLeft, ChevronRight, AlertTriangle, Plus, Trash2,
   Bell, CalendarDays, BookOpen, Clock, Loader2, MessageSquare,
 } from "lucide-react";
 import type { Task, TaskStatus, TaskPriority, Subtask } from "@/types";
-import { PROJECTS, CATEGORIES } from "@/types";
+import { CATEGORIES } from "@/types";
 import { useUpdateTask } from "@/hooks/useTasks";
+import { useProjectsQuery } from "@/hooks/useProjects";
 import { useNotasQuery, useCreateNota } from "@/hooks/useNotas";
 import { NOTE_TYPE_COLOR, NOTE_TYPE_LABEL, DIAS_SEMANA } from "@/types/note";
 import type { NoteType } from "@/types/note";
@@ -150,10 +151,12 @@ interface Props {
   onClose: () => void;
   onPrev: () => void;
   onNext: () => void;
+  readOnly?: boolean;
 }
 
-export default function TaskDetailPanel({ task, taskIndex, taskCount, onClose, onPrev, onNext }: Props) {
+export default function TaskDetailPanel({ task, taskIndex, taskCount, onClose, onPrev, onNext, readOnly = false }: Props) {
   const update = useUpdateTask();
+  const { data: projects = [] } = useProjectsQuery();
   const { data: allNotas = [] } = useNotasQuery();
 
   // local state for text fields (save on blur)
@@ -165,31 +168,43 @@ export default function TaskDetailPanel({ task, taskIndex, taskCount, onClose, o
   const [progress, setProgress] = useState(task.progress);
   const [subtasks, setSubtasks] = useState<Subtask[]>(task.subtasks ?? []);
   const [newSub, setNewSub] = useState("");
+  const [savingSub, setSavingSub] = useState(false);
+
+  useEffect(() => {
+    setSubtasks(task.subtasks ?? []);
+  }, [task.id, task.subtasks]);
 
   function save(updates: Record<string, unknown>) {
     update.mutate({ id: task.id, updates: updates as any });
   }
 
+  async function saveSubtasks(updated: Subtask[]) {
+    setSubtasks(updated);
+    setSavingSub(true);
+    try {
+      await update.mutateAsync({ id: task.id, updates: { subtasks: updated } });
+    } finally {
+      setSavingSub(false);
+    }
+  }
+
   function addSubtask() {
     if (!newSub.trim()) return;
     const updated = [...subtasks, { id: generateSubId(), title: newSub.trim(), status: "pendente" as TaskStatus }];
-    setSubtasks(updated);
     setNewSub("");
-    save({ subtasks: updated });
+    void saveSubtasks(updated);
   }
 
   function toggleSub(id: string) {
     const updated = subtasks.map((s) =>
       s.id === id ? { ...s, status: (s.status === "concluido" ? "pendente" : "concluido") as TaskStatus } : s
     );
-    setSubtasks(updated);
-    save({ subtasks: updated });
+    void saveSubtasks(updated);
   }
 
   function removeSub(id: string) {
     const updated = subtasks.filter((s) => s.id !== id);
-    setSubtasks(updated);
-    save({ subtasks: updated });
+    void saveSubtasks(updated);
   }
 
   const taskNotas = allNotas.filter((n) => n.tarefaId === task.id);
@@ -250,15 +265,38 @@ export default function TaskDetailPanel({ task, taskIndex, taskCount, onClose, o
 
           {/* Title */}
           <div className="px-4 pb-3">
+            {readOnly && (
+              <div className="mb-2 flex items-center gap-2">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+                  Somente visualização
+                </span>
+                <span className="text-[11px] text-surface-500">Responsável: <strong className="text-surface-700">{task.assignedToName}</strong></span>
+              </div>
+            )}
+            {readOnly ? (
+              <h2 className="text-base font-bold text-surface-900 px-1 py-0.5">{title}</h2>
+            ) : (
             <input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               onBlur={() => { if (title.trim() && title !== task.title) save({ title }); }}
               className="w-full text-base font-bold text-surface-900 bg-transparent border-none outline-none focus:bg-surface-50 rounded-lg px-1 py-0.5 -mx-1 transition-colors"
             />
+            )}
 
             {/* Pills */}
             <div className="flex items-center gap-2 mt-2 flex-wrap">
+              {readOnly ? (
+                <>
+                  <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full ${STATUS_PILL[task.status]}`}>
+                    {STATUS_OPTIONS.find((o) => o.value === task.status)?.label}
+                  </span>
+                  <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full ${PRIORITY_PILL[task.priority]}`}>
+                    {PRIORITY_OPTIONS.find((o) => o.value === task.priority)?.label}
+                  </span>
+                </>
+              ) : (
+              <>
               <select
                 value={task.status}
                 onChange={(e) => save({ status: e.target.value })}
@@ -280,6 +318,8 @@ export default function TaskDetailPanel({ task, taskIndex, taskCount, onClose, o
               {task.projeto && (
                 <span className="text-[11px] bg-surface-100 text-surface-600 px-2 py-0.5 rounded-full font-medium">{task.projeto}</span>
               )}
+              </>
+              )}
             </div>
           </div>
         </div>
@@ -289,6 +329,9 @@ export default function TaskDetailPanel({ task, taskIndex, taskCount, onClose, o
 
           {/* Situação atual */}
           <Section title="Situação atual">
+            {readOnly ? (
+              <p className="text-sm text-surface-700 whitespace-pre-wrap">{situacaoAtual || "—"}</p>
+            ) : (
             <textarea
               value={situacaoAtual}
               onChange={(e) => setSituacaoAtual(e.target.value)}
@@ -297,10 +340,14 @@ export default function TaskDetailPanel({ task, taskIndex, taskCount, onClose, o
               placeholder="O que está acontecendo com essa tarefa agora?"
               className="w-full px-3 py-2 text-sm text-surface-700 border border-surface-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/30 resize-none"
             />
+            )}
           </Section>
 
           {/* Impeditivo */}
           <Section title="Impeditivo">
+            {readOnly ? (
+              <p className={`text-sm ${impeditivo ? "text-amber-700" : "text-surface-400"}`}>{impeditivo || "—"}</p>
+            ) : (
             <div className="relative">
               {impeditivo && (
                 <AlertTriangle size={13} className="absolute left-3 top-2.5 text-amber-500 shrink-0" />
@@ -313,10 +360,18 @@ export default function TaskDetailPanel({ task, taskIndex, taskCount, onClose, o
                 className={`w-full px-3 py-2 text-sm border border-surface-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/30 ${impeditivo ? "pl-8 text-amber-700" : ""}`}
               />
             </div>
+            )}
           </Section>
 
           {/* Projeto / Categoria */}
           <Section title="Classificação">
+            {readOnly ? (
+              <div className="flex gap-2 text-xs text-surface-600">
+                <span>{task.projeto || "Sem projeto"}</span>
+                <span className="text-surface-300">·</span>
+                <span>{task.category || "Sem categoria"}</span>
+              </div>
+            ) : (
             <div className="grid grid-cols-2 gap-2">
               <select
                 value={task.projeto ?? ""}
@@ -324,7 +379,7 @@ export default function TaskDetailPanel({ task, taskIndex, taskCount, onClose, o
                 className="text-xs border border-surface-200 rounded-lg px-2.5 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/30"
               >
                 <option value="">Sem projeto</option>
-                {PROJECTS.map((p) => <option key={p} value={p}>{p}</option>)}
+                {projects.map((p) => <option key={p.id} value={p.name}>{p.name}</option>)}
               </select>
               <select
                 value={task.category ?? ""}
@@ -335,6 +390,7 @@ export default function TaskDetailPanel({ task, taskIndex, taskCount, onClose, o
                 {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
+            )}
           </Section>
 
           {/* Datas */}
@@ -347,12 +403,16 @@ export default function TaskDetailPanel({ task, taskIndex, taskCount, onClose, o
               ].map(({ label, field, value }) => (
                 <div key={field}>
                   <p className="text-[10px] text-surface-400 mb-1">{label}</p>
+                  {readOnly ? (
+                    <p className="text-xs text-surface-600">{value || "—"}</p>
+                  ) : (
                   <input
                     type="date"
                     defaultValue={value ?? ""}
                     onChange={(e) => save({ [field]: e.target.value || undefined })}
                     className="w-full text-xs border border-surface-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-500/30"
                   />
+                  )}
                 </div>
               ))}
             </div>
@@ -360,6 +420,12 @@ export default function TaskDetailPanel({ task, taskIndex, taskCount, onClose, o
 
           {/* Tempo */}
           <Section title="Tempo (horas)">
+            {readOnly ? (
+              <div className="flex gap-4 text-xs text-surface-600">
+                <span>Estimado: {tempoEstimado ? `${tempoEstimado}h` : "—"}</span>
+                <span>Previsto: {tempoPrevisto ? `${tempoPrevisto}h` : "—"}</span>
+              </div>
+            ) : (
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <p className="text-[10px] text-surface-400 mb-1">Estimado</p>
@@ -388,11 +454,13 @@ export default function TaskDetailPanel({ task, taskIndex, taskCount, onClose, o
                 />
               </div>
             </div>
+            )}
           </Section>
 
           {/* Progresso */}
           <Section title={`Progresso — ${progress}%`}>
             <div className="flex items-center gap-3">
+              {!readOnly && (
               <input
                 type="range" min={0} max={100}
                 value={progress}
@@ -400,6 +468,8 @@ export default function TaskDetailPanel({ task, taskIndex, taskCount, onClose, o
                 onPointerUp={() => save({ progress })}
                 className="flex-1 accent-brand-500 h-2"
               />
+              )}
+              {readOnly && <div className="flex-1" />}
               <span className="text-sm font-bold text-brand-600 tabular-nums w-10 text-right">{progress}%</span>
             </div>
             <div className="mt-1.5 h-1.5 bg-surface-100 rounded-full overflow-hidden">
@@ -408,10 +478,19 @@ export default function TaskDetailPanel({ task, taskIndex, taskCount, onClose, o
           </Section>
 
           {/* Subtarefas */}
-          <Section title={`Subtarefas ${subtasks.length > 0 ? `(${subDone}/${subtasks.length})` : ""}`}>
+          <Section title={`Subtarefas ${subtasks.length > 0 ? `(${subDone}/${subtasks.length})` : ""}${savingSub ? " · salvando…" : ""}`}>
             <div className="space-y-1.5 mb-2">
               {subtasks.map((sub) => (
                 <div key={sub.id} className="flex items-center gap-2 group">
+                  {readOnly ? (
+                    <div className={`w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 ${sub.status === "concluido" ? "bg-brand-500 border-brand-500" : "border-surface-300"}`}>
+                      {sub.status === "concluido" && (
+                        <svg width="9" height="7" fill="none" viewBox="0 0 9 7">
+                          <path d="M1 3.5l2.5 2.5 5-5" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      )}
+                    </div>
+                  ) : (
                   <button onClick={() => toggleSub(sub.id)} type="button" className="shrink-0">
                     <div className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-all ${sub.status === "concluido" ? "bg-brand-500 border-brand-500" : "border-surface-300"}`}>
                       {sub.status === "concluido" && (
@@ -421,7 +500,9 @@ export default function TaskDetailPanel({ task, taskIndex, taskCount, onClose, o
                       )}
                     </div>
                   </button>
+                  )}
                   <span className={`flex-1 text-xs ${sub.status === "concluido" ? "line-through text-surface-400" : "text-surface-700"}`}>{sub.title}</span>
+                  {!readOnly && (
                   <button
                     onClick={() => removeSub(sub.id)}
                     type="button"
@@ -429,9 +510,11 @@ export default function TaskDetailPanel({ task, taskIndex, taskCount, onClose, o
                   >
                     <Trash2 size={11} />
                   </button>
+                  )}
                 </div>
               ))}
             </div>
+            {!readOnly && (
             <div className="flex gap-2">
               <input
                 value={newSub}
@@ -448,6 +531,7 @@ export default function TaskDetailPanel({ task, taskIndex, taskCount, onClose, o
                 <Plus size={11} /> Add
               </button>
             </div>
+            )}
           </Section>
 
           {/* Notas vinculadas */}
@@ -502,7 +586,7 @@ export default function TaskDetailPanel({ task, taskIndex, taskCount, onClose, o
                 })}
               </div>
             )}
-            <QuickNoteForm tarefaId={task.id} tarefaTitulo={task.title} />
+            {!readOnly && <QuickNoteForm tarefaId={task.id} tarefaTitulo={task.title} />}
           </Section>
 
           {/* Meta */}

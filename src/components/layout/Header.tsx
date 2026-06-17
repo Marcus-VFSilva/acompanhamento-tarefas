@@ -3,12 +3,13 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
-import { LayoutDashboard, ListTodo, LogOut, FileBarChart2, Activity } from "lucide-react";
+import { LayoutDashboard, ListTodo, LogOut, FileBarChart2, Activity, Settings } from "lucide-react";
 
 interface HeaderProps {
   userName?: string | null;
   userEmail?: string | null;
   isAdmin?: boolean;
+  isManager?: boolean;
 }
 
 const NAV = [
@@ -16,9 +17,10 @@ const NAV = [
   { href: "/tarefas", label: "Tarefas", icon: ListTodo },
   { href: "/relatorios", label: "Relatórios", icon: FileBarChart2 },
   { href: "/monitoramento", label: "Monitoramento", icon: Activity },
+  { href: "/configuracoes", label: "Configurações", icon: Settings },
 ];
 
-export default function Header({ userName, userEmail, isAdmin }: HeaderProps) {
+export default function Header({ userName, userEmail, isAdmin, isManager }: HeaderProps) {
   const pathname = usePathname();
 
   return (
@@ -58,9 +60,9 @@ export default function Header({ userName, userEmail, isAdmin }: HeaderProps) {
             })}
           </nav>
 
-          {isAdmin && (
+          {(isAdmin || isManager) && (
             <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 text-[10px] font-semibold uppercase tracking-wider">
-              Gestor
+              {isAdmin ? "Gestor" : "Líder"}
             </span>
           )}
         </div>

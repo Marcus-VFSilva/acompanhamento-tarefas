@@ -18,12 +18,12 @@ export function useTasksQuery() {
 }
 
 // ── Client-side filter (uses Zustand filters + role) ────────────────
-export function useFilteredTasks(userEmail?: string, isAdmin?: boolean) {
+export function useFilteredTasks(userEmail?: string, canViewTeam?: boolean) {
   const { data: allTasks = [] } = useTasksQuery();
   const filters = useTaskStore((s) => s.filters);
 
   return allTasks.filter((task) => {
-    if (!isAdmin && userEmail && task.assignedTo !== userEmail) return false;
+    if (!canViewTeam && userEmail && task.assignedTo !== userEmail) return false;
     if (filters.assignedTo && task.assignedTo !== filters.assignedTo) return false;
     if (filters.status.length > 0 && !filters.status.includes(task.status)) return false;
     if (filters.priority.length > 0 && !filters.priority.includes(task.priority)) return false;
@@ -84,7 +84,18 @@ export function useUpdateTask() {
       if (!res.ok) throw new Error("Erro ao atualizar tarefa");
       return res.json() as Promise<Task>;
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["tasks"] }),
+    onMutate: async ({ id, updates }) => {
+      await queryClient.cancelQueries({ queryKey: ["tasks"] });
+      const previous = queryClient.getQueryData<Task[]>(["tasks"]);
+      queryClient.setQueryData<Task[]>(["tasks"], (old) =>
+        old?.map((t) => (t.id === id ? { ...t, ...updates } : t)) ?? []
+      );
+      return { previous };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous) queryClient.setQueryData(["tasks"], context.previous);
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ["tasks"] }),
   });
 }
 
