@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Trash2, AlertTriangle, MessageSquare } from "lucide-react";
+import { Trash2, AlertTriangle, MessageSquare, ListChecks } from "lucide-react";
 import type { Task, TaskStatus, TaskPriority } from "@/types";
 import { StatusBadge, PriorityBadge } from "./StatusBadge";
 import { useDeleteTask, useUpdateTask } from "@/hooks/useTasks";
@@ -215,6 +215,15 @@ export default function TaskTable({ tasks, selectedTaskId, onSelect, canDeleteFn
                       <span className="text-[13px] font-semibold text-surface-900 leading-snug">
                         {task.title.length > 42 ? task.title.slice(0, 42) + "…" : task.title}
                       </span>
+                      {task.subtasks.length > 0 && (
+                        <span
+                          title={`${task.subtasks.filter((s) => s.status === "concluido").length}/${task.subtasks.length} subtarefa${task.subtasks.length > 1 ? "s" : ""}`}
+                          className="inline-flex items-center gap-1 text-[10px] bg-surface-100 text-surface-600 border border-surface-200 px-2 py-0.5 rounded-full font-medium shrink-0"
+                        >
+                          <ListChecks size={10} />
+                          {task.subtasks.filter((s) => s.status === "concluido").length}/{task.subtasks.length}
+                        </span>
+                      )}
                       {count > 0 && (
                         <span
                           title={`${count} nota${count > 1 ? "s" : ""} vinculada${count > 1 ? "s" : ""}`}
