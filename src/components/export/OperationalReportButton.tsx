@@ -123,11 +123,11 @@ export default function OperationalReportButton({
         setMessage("Arquivos gerados e compartilhados com anexos via sistema.");
       } else if (hasManager) {
         setMessage(
-          "Arquivo .eml baixado. Abra no Outlook Classic e use Inserir → Assinatura após \"Atenciosamente,\".",
+          "Arquivo .eml baixado. Abra no Outlook Classic (duplo clique) — deve abrir para edição e envio. Insira sua assinatura após \"Atenciosamente,\".",
         );
       } else {
         setMessage(
-          "Arquivo .eml baixado. Configure o gestor em Configurações, abra no Outlook e insira sua assinatura (Inserir → Assinatura).",
+          "Arquivo .eml baixado. Configure o gestor em Configurações. Abra no Outlook para editar, inserir assinatura e enviar.",
         );
       }
     } catch (err) {

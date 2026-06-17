@@ -31,6 +31,35 @@ function encodeBase64Utf8(text: string): string {
   return btoa(binary);
 }
 
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+/** Converte o corpo em HTML para o Outlook abrir em modo rich text e aceitar assinatura com imagem. */
+function buildHtmlBody(plainBody: string): string {
+  const lines = plainBody.split(/\r\n/);
+  const htmlParts = lines.map((line) => {
+    if (!line) return "<br>";
+    return `<p style="margin:0 0 10px;font-family:Calibri,Arial,sans-serif;font-size:11pt;color:#1f2937;line-height:1.45">${escapeHtml(line)}</p>`;
+  });
+
+  // Espaço extra após "Atenciosamente," para a assinatura com imagem
+  htmlParts.push('<p style="margin:0;font-family:Calibri,Arial,sans-serif;font-size:11pt;"><br><br></p>');
+
+  return [
+    "<!DOCTYPE html>",
+    "<html>",
+    "<head><meta charset=\"utf-8\"></head>",
+    '<body style="margin:0;padding:0;font-family:Calibri,Arial,sans-serif;font-size:11pt;color:#1f2937;">',
+    htmlParts.join(""),
+    "</body></html>",
+  ].join("");
+}
+
 async function blobToBase64Lines(blob: Blob): Promise<string> {
   const buffer = await blob.arrayBuffer();
   const bytes = new Uint8Array(buffer);
@@ -41,7 +70,10 @@ async function blobToBase64Lines(blob: Blob): Promise<string> {
     binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
   }
 
-  const base64 = btoa(binary);
+  return wrapBase64(btoa(binary));
+}
+
+function wrapBase64(base64: string): string {
   return base64.match(/.{1,76}/g)?.join(CRLF) ?? base64;
 }
 
@@ -54,27 +86,48 @@ function mimeTypeFor(filename: string): string {
 }
 
 export async function buildOperationalEml(options: BuildEmlOptions): Promise<Blob> {
-  const boundary = `----=_Report_${Date.now()}`;
+  const outerBoundary = `----=_Report_${Date.now()}`;
+  const altBoundary = `----=_Alt_${Date.now() + 1}`;
   const plainBody = options.body.replace(/\n/g, CRLF);
+  const htmlBody = buildHtmlBody(plainBody);
+  const hasAttachments = options.attachments.length > 0;
   const parts: string[] = [];
 
   parts.push(`From: ${encodeMimeHeader(options.fromName)} <${options.fromEmail}>`);
   if (options.toEmail) parts.push(`To: ${options.toEmail}`);
   parts.push(`Subject: ${encodeMimeHeader(options.subject)}`);
+  parts.push("X-Unsent: 1");
+  parts.push("Content-Class: urn:content-classes:message");
+  if (hasAttachments) parts.push("X-MS-Has-Attach: yes");
   parts.push("MIME-Version: 1.0");
-  parts.push(`Content-Type: multipart/mixed; boundary="${boundary}"`);
+  parts.push(`Content-Type: multipart/mixed; boundary="${outerBoundary}"`);
   parts.push("");
 
-  parts.push(`--${boundary}`);
+  // Corpo em plain + HTML — Outlook usa HTML e preserva assinatura com imagens
+  parts.push(`--${outerBoundary}`);
+  parts.push(`Content-Type: multipart/alternative; boundary="${altBoundary}"`);
+  parts.push("");
+
+  parts.push(`--${altBoundary}`);
   parts.push("Content-Type: text/plain; charset=UTF-8");
   parts.push("Content-Transfer-Encoding: base64");
   parts.push("");
   parts.push(encodeBase64Utf8(plainBody));
   parts.push("");
 
+  parts.push(`--${altBoundary}`);
+  parts.push("Content-Type: text/html; charset=UTF-8");
+  parts.push("Content-Transfer-Encoding: base64");
+  parts.push("");
+  parts.push(encodeBase64Utf8(htmlBody));
+  parts.push("");
+
+  parts.push(`--${altBoundary}--`);
+  parts.push("");
+
   for (const attachment of options.attachments) {
     const base64 = await blobToBase64Lines(attachment.blob);
-    parts.push(`--${boundary}`);
+    parts.push(`--${outerBoundary}`);
     parts.push(`Content-Type: ${mimeTypeFor(attachment.filename)}; name="${attachment.filename}"`);
     parts.push("Content-Transfer-Encoding: base64");
     parts.push(`Content-Disposition: attachment; filename="${attachment.filename}"`);
@@ -83,7 +136,7 @@ export async function buildOperationalEml(options: BuildEmlOptions): Promise<Blo
     parts.push("");
   }
 
-  parts.push(`--${boundary}--`);
+  parts.push(`--${outerBoundary}--`);
   parts.push("");
 
   return new Blob([parts.join(CRLF)], { type: "message/rfc822" });

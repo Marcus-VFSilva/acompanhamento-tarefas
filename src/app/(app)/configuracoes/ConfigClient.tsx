@@ -136,18 +136,18 @@ export default function ConfigClient({ userEmail, userName }: Props) {
           <h2 className="text-sm font-bold text-surface-700">Assinatura de e-mail</h2>
         </div>
         <p className="text-xs text-surface-500 leading-relaxed">
-          O sistema não consegue acessar as assinaturas salvas no seu Outlook — elas ficam apenas
-          no seu computador. Mas ao abrir o arquivo <strong>.eml</strong> gerado, o e-mail fica
-          editável e você insere a sua assinatura em um clique.
+          O e-mail abre em modo HTML no Outlook, permitindo inserir sua assinatura com imagem
+          via <strong>Inserir → Assinatura</strong> após &quot;Atenciosamente,&quot;.
         </p>
         <ol className="text-xs text-surface-600 leading-relaxed list-decimal list-inside space-y-1.5 bg-surface-50 rounded-lg p-4 border border-surface-100">
-          <li>Gere o report operacional e abra o <strong>.eml</strong> no Outlook Classic</li>
-          <li>Posicione o cursor após &quot;Atenciosamente,&quot;</li>
-          <li>Vá em <strong>Inserir → Assinatura</strong> e escolha a sua assinatura corporativa</li>
-          <li>Revise e envie</li>
+          <li>Gere o report operacional e abra o <strong>.eml</strong> com duplo clique (Outlook Classic)</li>
+          <li>Confirme que abriu para <strong>edição</strong> — deve aparecer o botão <strong>Enviar</strong></li>
+          <li>Após &quot;Atenciosamente,&quot;, use <strong>Inserir → Assinatura</strong></li>
+          <li>Revise e clique em <strong>Enviar</strong></li>
         </ol>
         <p className="text-[11px] text-surface-400">
-          Os anexos (Excel e PDFs) já vêm incluídos no .eml — só falta a assinatura visual.
+          Se abrir só para leitura (Responder/Encaminhar), clique com o botão direito no .eml →
+          Abrir com → Outlook (classic).
         </p>
       </section>
 
