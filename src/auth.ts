@@ -2,10 +2,18 @@ import NextAuth from "next-auth";
 import MicrosoftEntraID from "next-auth/providers/microsoft-entra-id";
 import Credentials from "next-auth/providers/credentials";
 
-const ADMIN_EMAILS = (process.env.ADMIN_EMAILS ?? "").split(",").map((e) => e.trim().toLowerCase());
-const IS_DEV = true;
+const ADMIN_EMAILS = (process.env.ADMIN_EMAILS ?? "").split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
+
+const IS_DEV =
+  process.env.NODE_ENV !== "production" || process.env.ENABLE_DEV_LOGIN === "true";
 
 export { IS_DEV };
+
+const microsoftConfigured = Boolean(
+  process.env.AUTH_MICROSOFT_ENTRA_ID_ID &&
+  process.env.AUTH_MICROSOFT_ENTRA_ID_SECRET &&
+  process.env.AUTH_MICROSOFT_ENTRA_ID_ISSUER,
+);
 
 function emailToName(email: string): string {
   return email.split("@")[0]
@@ -15,12 +23,17 @@ function emailToName(email: string): string {
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  trustHost: true,
   providers: [
-    MicrosoftEntraID({
-      clientId: process.env.AUTH_MICROSOFT_ENTRA_ID_ID!,
-      clientSecret: process.env.AUTH_MICROSOFT_ENTRA_ID_SECRET!,
-      issuer: process.env.AUTH_MICROSOFT_ENTRA_ID_ISSUER,
-    }),
+    ...(microsoftConfigured
+      ? [
+          MicrosoftEntraID({
+            clientId: process.env.AUTH_MICROSOFT_ENTRA_ID_ID!,
+            clientSecret: process.env.AUTH_MICROSOFT_ENTRA_ID_SECRET!,
+            issuer: process.env.AUTH_MICROSOFT_ENTRA_ID_ISSUER,
+          }),
+        ]
+      : []),
     ...(IS_DEV
       ? [
           Credentials({
@@ -62,5 +75,5 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       return session;
     },
   },
-  pages: { signIn: "/login" },
+  pages: { signIn: "/login", error: "/login" },
 });

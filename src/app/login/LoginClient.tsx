@@ -10,7 +10,19 @@ import {
 
 interface Props {
   isDev: boolean;
+  authError?: string | null;
 }
+
+const AUTH_ERROR_MESSAGES: Record<string, string> = {
+  Configuration: "Configuração de autenticação incompleta. Verifique AUTH_SECRET e variáveis Microsoft na Vercel.",
+  AccessDenied: "Acesso negado. Sua conta não tem permissão para entrar.",
+  Verification: "Link de verificação inválido ou expirado.",
+  OAuthSignin: "Erro ao iniciar login Microsoft. Verifique as credenciais no Azure e na Vercel.",
+  OAuthCallback: "Erro no retorno do Microsoft. Confira o Redirect URI no Azure App Registration.",
+  OAuthCreateAccount: "Não foi possível criar a conta.",
+  Callback: "Erro no callback de autenticação.",
+  Default: "Erro ao autenticar. Tente novamente ou use o login dev.",
+};
 
 const FEATURES = [
   {
@@ -41,11 +53,14 @@ const SYSTEM_SNAPSHOT = [
   { label: "Em implantação",         value: "3 sistemas",  dot: "bg-emerald-400" },
 ];
 
-export default function LoginClient({ isDev }: Props) {
+export default function LoginClient({ isDev, authError }: Props) {
   const router = useRouter();
   const [loading, setLoading] = useState<string | false>(false);
   const [devEmail, setDevEmail] = useState("");
   const [devError, setDevError] = useState("");
+  const authErrorMessage = authError
+    ? AUTH_ERROR_MESSAGES[authError] ?? AUTH_ERROR_MESSAGES.Default
+    : null;
 
   async function handleMicrosoft() {
     setLoading("ms");
@@ -206,6 +221,12 @@ export default function LoginClient({ isDev }: Props) {
           </div>
 
           <div className="space-y-3">
+
+            {authErrorMessage && (
+              <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[12px] text-red-700 leading-relaxed">
+                {authErrorMessage}
+              </div>
+            )}
 
             {/* Microsoft SSO button */}
             <button
