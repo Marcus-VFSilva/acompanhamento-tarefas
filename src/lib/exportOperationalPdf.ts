@@ -1,6 +1,6 @@
 import { jsPDF } from "jspdf";
 import type { OperationalReportContext, OperationalReportMetrics } from "@/lib/operationalReportMetrics";
-import { formatReportDate } from "@/lib/operationalReportMetrics";
+import { formatReportDate, formatShortDate, getTaskDeliveryDate } from "@/lib/operationalReportMetrics";
 
 const BRAND: [number, number, number] = [4, 74, 66];
 const TEXT: [number, number, number] = [51, 65, 85];
@@ -213,6 +213,22 @@ export function exportOperationalPdf(
       ]),
       y,
       [70, 30, 40, 25],
+    );
+  }
+
+  if (metrics.deliveredThisWeek.length > 0) {
+    if (y > 220) { pdf.addPage(); y = 20; }
+    y = drawSectionTitle(pdf, "Tarefas entregues essa semana", y);
+    y = drawTable(
+      pdf,
+      ["Título", "Projeto", "Entrega"],
+      metrics.deliveredThisWeek.slice(0, 15).map((t) => [
+        t.title,
+        t.projeto ?? "—",
+        formatShortDate(getTaskDeliveryDate(t)),
+      ]),
+      y,
+      [85, 50, 25],
     );
   }
 

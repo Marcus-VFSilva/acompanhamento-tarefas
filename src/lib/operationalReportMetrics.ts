@@ -24,6 +24,47 @@ export interface OperationalReportMetrics {
   collaboratorSummary: ReturnType<typeof buildCollaboratorData>;
   impeditivos: Task[];
   activeTasks: Task[];
+  deliveredThisWeek: Task[];
+}
+
+function parseDateOnly(dateStr: string): Date | null {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  if (!y || !m || !d) return null;
+  return new Date(y, m - 1, d);
+}
+
+function getWeekBounds(date = new Date()) {
+  const ref = new Date(date);
+  ref.setHours(0, 0, 0, 0);
+  const day = ref.getDay();
+  const diffToMonday = day === 0 ? -6 : 1 - day;
+  const start = new Date(ref);
+  start.setDate(ref.getDate() + diffToMonday);
+  const end = new Date(start);
+  end.setDate(start.getDate() + 6);
+  end.setHours(23, 59, 59, 999);
+  return { start, end };
+}
+
+export function getTaskDeliveryDate(task: Task): string | undefined {
+  return task.dataConclusao?.trim() || task.dataEntrega?.trim() || undefined;
+}
+
+export function isTaskDeliveredThisWeek(task: Task, ref = new Date()): boolean {
+  if (task.status !== "concluido") return false;
+  const deliveryDate = getTaskDeliveryDate(task);
+  if (!deliveryDate) return false;
+  const date = parseDateOnly(deliveryDate);
+  if (!date) return false;
+  const { start, end } = getWeekBounds(ref);
+  return date >= start && date <= end;
+}
+
+export function formatShortDate(dateStr?: string) {
+  if (!dateStr?.trim()) return "—";
+  const date = parseDateOnly(dateStr);
+  if (!date) return "—";
+  return date.toLocaleDateString("pt-BR");
 }
 
 export function buildOperationalReportMetrics(tasks: Task[]): OperationalReportMetrics {
@@ -63,6 +104,7 @@ export function buildOperationalReportMetrics(tasks: Task[]): OperationalReportM
     collaboratorSummary: buildCollaboratorData(tasks),
     impeditivos: tasks.filter((t) => t.impeditivo?.trim()),
     activeTasks: tasks.filter((t) => t.status === "em_andamento" || t.status === "pendente"),
+    deliveredThisWeek: tasks.filter((t) => isTaskDeliveredThisWeek(t)),
   };
 }
 
