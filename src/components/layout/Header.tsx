@@ -16,7 +16,7 @@ const NAV = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/tarefas", label: "Tarefas", icon: ListTodo },
   { href: "/relatorios", label: "Relatórios", icon: FileBarChart2 },
-  { href: "/monitoramento", label: "Monitoramento", icon: Activity },
+  // { href: "/monitoramento", label: "Monitoramento", icon: Activity },
   { href: "/configuracoes", label: "Configurações", icon: Settings },
 ];
 
