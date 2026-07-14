@@ -4,7 +4,7 @@
 
 import { useState, useCallback } from "react";
 
-import { Plus, Search, X, LayoutGrid, List, Filter, Eye } from "lucide-react";
+import { Plus, Search, X, Filter, Eye, Focus, Table2 } from "lucide-react";
 
 import { useTaskStore, DEFAULT_FILTERS } from "@/store/taskStore";
 
@@ -12,9 +12,9 @@ import { useFilteredTasks, useUsersQuery } from "@/hooks/useTasks";
 
 import { useUserRole } from "@/hooks/useUserRole";
 
-import TaskCard from "@/components/tasks/TaskCard";
-
 import TaskTable from "@/components/tasks/TaskTable";
+
+import TaskFocusView from "@/components/tasks/TaskFocusView";
 
 import TaskModal from "@/components/tasks/TaskModal";
 
@@ -38,7 +38,7 @@ interface Props {
 
 
 
-type ViewMode = "cards" | "tabela";
+type ViewMode = "tabela" | "foco";
 
 
 
@@ -80,7 +80,7 @@ export default function TarefasClient({ isAdmin, userId, userEmail, userName }: 
 
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
 
-  const [view, setView] = useState<ViewMode>("tabela");
+  const [view, setView] = useState<ViewMode>("foco");
 
 
 
@@ -201,6 +201,40 @@ export default function TarefasClient({ isAdmin, userId, userEmail, userName }: 
               </p>
 
             )}
+
+            <div className="mt-2.5 flex items-center bg-surface-100 rounded-lg p-0.5 gap-0.5 w-fit">
+
+              <button
+
+                type="button"
+
+                onClick={() => setView("tabela")}
+
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium transition-all
+                  ${view === "tabela" ? "bg-white shadow-sm text-surface-900" : "text-surface-400 hover:text-surface-700"}`}
+
+              >
+
+                <Table2 size={12} /> Visão geral
+
+              </button>
+
+              <button
+
+                type="button"
+
+                onClick={() => setView("foco")}
+
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium transition-all
+                  ${view === "foco" ? "bg-white shadow-sm text-surface-900" : "text-surface-400 hover:text-surface-700"}`}
+
+              >
+
+                <Focus size={12} /> Foco
+
+              </button>
+
+            </div>
 
           </div>
 
@@ -424,7 +458,19 @@ export default function TarefasClient({ isAdmin, userId, userEmail, userName }: 
 
           </div>
 
-        ) : view === "tabela" ? (
+        ) : view === "foco" ? (
+
+          <TaskFocusView
+
+            tasks={tasks}
+
+            selectedTaskId={selectedTaskLive?.id ?? null}
+
+            onSelect={handleSelect}
+
+          />
+
+        ) : (
 
           <TaskTable
 
@@ -441,30 +487,6 @@ export default function TarefasClient({ isAdmin, userId, userEmail, userName }: 
             showAssignee={canViewTeam}
 
           />
-
-        ) : (
-
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 md:gap-4">
-
-            {tasks.map((task) => (
-
-              <TaskCard
-
-                key={task.id}
-
-                task={task}
-
-                onEdit={(t) => setSelectedTask(t)}
-
-                canDelete={canDelete(task)}
-
-                readOnly={isTeamLeader}
-
-              />
-
-            ))}
-
-          </div>
 
         )}
 
