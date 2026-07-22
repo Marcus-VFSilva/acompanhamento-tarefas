@@ -1,9 +1,117 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, Trash2, Loader2, Users, FolderKanban, Save, Mail, PenLine, Lock } from "lucide-react";
-import { useProjectsQuery, useCreateProject, useDeleteProject } from "@/hooks/useProjects";
+import { Plus, Trash2, Loader2, Users, FolderKanban, Save, Mail, PenLine, Lock, Pencil, X, Check } from "lucide-react";
+import { useProjectsQuery, useCreateProject, useUpdateProject, useDeleteProject } from "@/hooks/useProjects";
 import { useSettingsQuery, useUpdateSettings, useChangePassword } from "@/hooks/useSettings";
+import { PROJECT_STATUS_LABEL, PROJECT_STATUS_COLOR, type Project, type ProjectStatus } from "@/types/project";
+
+const PROJECT_STATUSES: ProjectStatus[] = ["planejamento", "em_andamento", "concluido", "pausado"];
+
+function ProjectRow({ project }: { project: Project }) {
+  const update = useUpdateProject();
+  const del = useDeleteProject();
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(project.name);
+  const [objetivo, setObjetivo] = useState(project.objetivo ?? "");
+  const [status, setStatus] = useState<ProjectStatus>(project.status ?? "em_andamento");
+
+  const sc = PROJECT_STATUS_COLOR[status];
+
+  async function handleSave() {
+    await update.mutateAsync({
+      id: project.id,
+      updates: { name: name.trim(), objetivo: objetivo.trim(), status },
+    });
+    setEditing(false);
+  }
+
+  if (editing) {
+    return (
+      <li className="px-4 py-3 space-y-2.5 bg-surface-50/60">
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          className="w-full px-3 py-2 border border-surface-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/30"
+          placeholder="Nome do projeto"
+        />
+        <div className="flex flex-wrap gap-1.5">
+          {PROJECT_STATUSES.map((s) => {
+            const c = PROJECT_STATUS_COLOR[s];
+            return (
+              <button
+                key={s}
+                type="button"
+                onClick={() => setStatus(s)}
+                className={`px-2.5 py-1 rounded-md text-[11px] font-medium border transition-all ${
+                  status === s ? `${c.bg} ${c.text} border-current` : "bg-white text-surface-500 border-surface-200 hover:border-surface-300"
+                }`}
+              >
+                {PROJECT_STATUS_LABEL[s]}
+              </button>
+            );
+          })}
+        </div>
+        <textarea
+          value={objetivo}
+          onChange={(e) => setObjetivo(e.target.value)}
+          rows={2}
+          placeholder="Objetivo do projeto…"
+          className="w-full px-3 py-2 border border-surface-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/30 resize-none"
+        />
+        <div className="flex gap-2 justify-end">
+          <button
+            onClick={() => { setEditing(false); setName(project.name); setObjetivo(project.objetivo ?? ""); setStatus(project.status ?? "em_andamento"); }}
+            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs text-surface-600 border border-surface-200 rounded-lg hover:bg-surface-50"
+          >
+            <X size={13} /> Cancelar
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={!name.trim() || update.isPending}
+            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-white bg-brand-500 rounded-lg hover:bg-brand-600 disabled:opacity-60"
+          >
+            {update.isPending ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />} Salvar
+          </button>
+        </div>
+      </li>
+    );
+  }
+
+  return (
+    <li className="flex items-start justify-between gap-3 px-4 py-3 hover:bg-surface-50/60">
+      <div className="min-w-0">
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-surface-800">{project.name}</span>
+          <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full ${sc.bg} ${sc.text}`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${sc.dot}`} />
+            {PROJECT_STATUS_LABEL[status]}
+          </span>
+        </div>
+        {project.objetivo && (
+          <p className="text-xs text-surface-500 mt-0.5 line-clamp-2">{project.objetivo}</p>
+        )}
+      </div>
+      <div className="flex items-center gap-1 shrink-0">
+        <button
+          onClick={() => setEditing(true)}
+          className="p-1.5 rounded-lg text-surface-300 hover:text-brand-600 hover:bg-brand-50 transition-colors"
+          title="Editar projeto"
+        >
+          <Pencil size={14} />
+        </button>
+        <button
+          onClick={() => del.mutate(project.id)}
+          disabled={del.isPending}
+          className="p-1.5 rounded-lg text-surface-300 hover:text-red-500 hover:bg-red-50 transition-colors"
+          title="Remover projeto"
+        >
+          <Trash2 size={14} />
+        </button>
+      </div>
+    </li>
+  );
+}
 
 interface Props {
   userEmail: string;
@@ -14,11 +122,12 @@ export default function ConfigClient({ userEmail, userName }: Props) {
   const { data: projects = [], isLoading: loadingProjects } = useProjectsQuery();
   const { data: settings, isLoading: loadingSettings } = useSettingsQuery();
   const createProject = useCreateProject();
-  const deleteProject = useDeleteProject();
   const updateSettings = useUpdateSettings();
   const changePassword = useChangePassword();
 
   const [newProject, setNewProject] = useState("");
+  const [newProjectStatus, setNewProjectStatus] = useState<ProjectStatus>("em_andamento");
+  const [newProjectObjetivo, setNewProjectObjetivo] = useState("");
   const [managerEmail, setManagerEmail] = useState("");
   const [managerName, setManagerName] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -37,8 +146,10 @@ export default function ConfigClient({ userEmail, userName }: Props) {
     e.preventDefault();
     const name = newProject.trim();
     if (!name) return;
-    await createProject.mutateAsync(name);
+    await createProject.mutateAsync({ name, objetivo: newProjectObjetivo.trim(), status: newProjectStatus });
     setNewProject("");
+    setNewProjectObjetivo("");
+    setNewProjectStatus("em_andamento");
   }
 
   async function handleSaveManager(e: React.FormEvent) {
@@ -223,24 +334,50 @@ export default function ConfigClient({ userEmail, userName }: Props) {
           <h2 className="text-sm font-bold text-surface-700">Projetos</h2>
         </div>
         <p className="text-xs text-surface-500 leading-relaxed">
-          Projetos disponíveis no select ao criar tarefas e nos relatórios por projeto.
+          Projetos disponíveis no select ao criar tarefas, na página de Projetos e nos relatórios por projeto.
         </p>
 
-        <form onSubmit={handleAddProject} className="flex gap-2">
-          <input
-            value={newProject}
-            onChange={(e) => setNewProject(e.target.value)}
-            placeholder="Nome do novo projeto…"
-            className="flex-1 px-3 py-2 border border-surface-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/30"
+        <form onSubmit={handleAddProject} className="space-y-2.5 bg-surface-50/60 border border-surface-100 rounded-xl p-3">
+          <div className="flex gap-2">
+            <input
+              value={newProject}
+              onChange={(e) => setNewProject(e.target.value)}
+              placeholder="Nome do novo projeto…"
+              className="flex-1 px-3 py-2 border border-surface-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/30"
+            />
+            <button
+              type="submit"
+              disabled={!newProject.trim() || createProject.isPending}
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-surface-800 hover:bg-surface-900 text-white rounded-lg text-sm font-medium disabled:opacity-60"
+            >
+              {createProject.isPending ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+              Adicionar
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {PROJECT_STATUSES.map((s) => {
+              const c = PROJECT_STATUS_COLOR[s];
+              return (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setNewProjectStatus(s)}
+                  className={`px-2.5 py-1 rounded-md text-[11px] font-medium border transition-all ${
+                    newProjectStatus === s ? `${c.bg} ${c.text} border-current` : "bg-white text-surface-500 border-surface-200 hover:border-surface-300"
+                  }`}
+                >
+                  {PROJECT_STATUS_LABEL[s]}
+                </button>
+              );
+            })}
+          </div>
+          <textarea
+            value={newProjectObjetivo}
+            onChange={(e) => setNewProjectObjetivo(e.target.value)}
+            rows={2}
+            placeholder="Objetivo do projeto (opcional)…"
+            className="w-full px-3 py-2 border border-surface-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/30 resize-none"
           />
-          <button
-            type="submit"
-            disabled={!newProject.trim() || createProject.isPending}
-            className="inline-flex items-center gap-1.5 px-4 py-2 bg-surface-800 hover:bg-surface-900 text-white rounded-lg text-sm font-medium disabled:opacity-60"
-          >
-            {createProject.isPending ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
-            Adicionar
-          </button>
         </form>
 
         {loadingProjects ? (
@@ -250,17 +387,7 @@ export default function ConfigClient({ userEmail, userName }: Props) {
         ) : (
           <ul className="divide-y divide-surface-100 border border-surface-100 rounded-xl overflow-hidden">
             {projects.map((p) => (
-              <li key={p.id} className="flex items-center justify-between px-4 py-3 hover:bg-surface-50/60">
-                <span className="text-sm text-surface-800">{p.name}</span>
-                <button
-                  onClick={() => deleteProject.mutate(p.id)}
-                  disabled={deleteProject.isPending}
-                  className="p-1.5 rounded-lg text-surface-300 hover:text-red-500 hover:bg-red-50 transition-colors"
-                  title="Remover projeto"
-                >
-                  <Trash2 size={14} />
-                </button>
-              </li>
+              <ProjectRow key={p.id} project={p} />
             ))}
             {projects.length === 0 && (
               <li className="px-4 py-6 text-center text-sm text-surface-400">Nenhum projeto cadastrado</li>

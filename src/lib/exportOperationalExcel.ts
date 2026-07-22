@@ -94,8 +94,6 @@ export async function exportOperationalExcel(
     ["Pendentes", metrics.pendente],
     ["Canceladas", metrics.cancelado],
     ["Com impeditivo", metrics.comImpeditivo],
-    ["Horas estimadas", `${metrics.totalEstimado}h`],
-    ["Horas previstas", `${metrics.totalPrevisto}h`],
   ];
 
   summary.addRow([]);
@@ -122,7 +120,7 @@ export async function exportOperationalExcel(
   const headers = [
     "Título", "Responsável", "Projeto", "Status", "Prioridade",
     "Situação Atual", "Impeditivo", "Prazo", "Entrega", "Conclusão",
-    "T.Est (h)", "T.Prev (h)", "Progresso (%)",
+    "Progresso (%)",
   ];
 
   const ws = wb.addWorksheet("Tarefas", { views: [{ state: "frozen", ySplit: 1 }] });
@@ -143,8 +141,6 @@ export async function exportOperationalExcel(
       t.dueDate ?? "",
       t.dataEntrega ?? "",
       t.dataConclusao ?? "",
-      t.tempoEstimado ?? "",
-      t.tempoPrevisto ?? "",
       t.progress,
     ]);
 
@@ -167,7 +163,7 @@ export async function exportOperationalExcel(
   ws.columns = [
     { width: 42 }, { width: 18 }, { width: 18 }, { width: 14 }, { width: 12 },
     { width: 40 }, { width: 35 }, { width: 12 }, { width: 12 }, { width: 12 },
-    { width: 10 }, { width: 10 }, { width: 12 },
+    { width: 12 },
   ];
 
   // ── Sheet 3: Por Colaborador ──

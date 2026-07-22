@@ -17,8 +17,6 @@ export async function exportToExcel(tasks: Task[], filename = "relatorio-tarefas
     "Prazo (Deadline)": t.dueDate ?? "",
     "Data de Entrega": t.dataEntrega ?? "",
     "Data de Conclusão": t.dataConclusao ?? "",
-    "Tempo Estimado (h)": t.tempoEstimado ?? "",
-    "Tempo Previsto (h)": t.tempoPrevisto ?? "",
     "Progresso (%)": t.progress,
     "Subtarefas Total": t.subtasks.length,
     "Subtarefas Concluídas": t.subtasks.filter((s) => s.status === "concluido").length,
@@ -27,18 +25,16 @@ export async function exportToExcel(tasks: Task[], filename = "relatorio-tarefas
   }));
 
   // ── Sheet 2: Resumo por colaborador ──
-  const byUser = new Map<string, { name: string; total: number; concluido: number; em_andamento: number; pendente: number; hEst: number; hPrev: number }>();
+  const byUser = new Map<string, { name: string; total: number; concluido: number; em_andamento: number; pendente: number }>();
   tasks.forEach((t) => {
     if (!byUser.has(t.assignedUserId)) {
-      byUser.set(t.assignedUserId, { name: t.assignedToName, total: 0, concluido: 0, em_andamento: 0, pendente: 0, hEst: 0, hPrev: 0 });
+      byUser.set(t.assignedUserId, { name: t.assignedToName, total: 0, concluido: 0, em_andamento: 0, pendente: 0 });
     }
     const u = byUser.get(t.assignedUserId)!;
     u.total++;
     if (t.status === "concluido") u.concluido++;
     else if (t.status === "em_andamento") u.em_andamento++;
     else if (t.status === "pendente") u.pendente++;
-    u.hEst += t.tempoEstimado ?? 0;
-    u.hPrev += t.tempoPrevisto ?? 0;
   });
 
   const userRows = Array.from(byUser.values()).map((u) => ({
@@ -48,24 +44,20 @@ export async function exportToExcel(tasks: Task[], filename = "relatorio-tarefas
     "Em Andamento": u.em_andamento,
     Pendentes: u.pendente,
     "Taxa de Conclusão (%)": u.total > 0 ? Math.round((u.concluido / u.total) * 100) : 0,
-    "Horas Estimadas": u.hEst,
-    "Horas Previstas": u.hPrev,
   }));
 
   // ── Sheet 3: Resumo por projeto ──
-  const byProject = new Map<string, { total: number; concluido: number; em_andamento: number; pendente: number; hEst: number; hPrev: number }>();
+  const byProject = new Map<string, { total: number; concluido: number; em_andamento: number; pendente: number }>();
   tasks.forEach((t) => {
     const key = t.projeto || "Sem projeto";
     if (!byProject.has(key)) {
-      byProject.set(key, { total: 0, concluido: 0, em_andamento: 0, pendente: 0, hEst: 0, hPrev: 0 });
+      byProject.set(key, { total: 0, concluido: 0, em_andamento: 0, pendente: 0 });
     }
     const p = byProject.get(key)!;
     p.total++;
     if (t.status === "concluido") p.concluido++;
     else if (t.status === "em_andamento") p.em_andamento++;
     else if (t.status === "pendente") p.pendente++;
-    p.hEst += t.tempoEstimado ?? 0;
-    p.hPrev += t.tempoPrevisto ?? 0;
   });
 
   const projectRows = Array.from(byProject.entries()).map(([proj, p]) => ({
@@ -75,23 +67,21 @@ export async function exportToExcel(tasks: Task[], filename = "relatorio-tarefas
     "Em Andamento": p.em_andamento,
     Pendentes: p.pendente,
     "Taxa de Conclusão (%)": p.total > 0 ? Math.round((p.concluido / p.total) * 100) : 0,
-    "Horas Estimadas": p.hEst,
-    "Horas Previstas": p.hPrev,
   }));
 
   // ── Build workbook ──
   const wb = XLSX.utils.book_new();
 
   const ws1 = XLSX.utils.json_to_sheet(taskRows);
-  ws1["!cols"] = [{ wch: 40 }, { wch: 18 }, { wch: 18 }, { wch: 15 }, { wch: 14 }, { wch: 12 }, { wch: 50 }, { wch: 45 }, { wch: 14 }, { wch: 14 }, { wch: 16 }, { wch: 18 }, { wch: 18 }, { wch: 13 }, { wch: 16 }, { wch: 20 }, { wch: 12 }, { wch: 14 }];
+  ws1["!cols"] = [{ wch: 40 }, { wch: 18 }, { wch: 18 }, { wch: 15 }, { wch: 14 }, { wch: 12 }, { wch: 50 }, { wch: 45 }, { wch: 14 }, { wch: 14 }, { wch: 16 }, { wch: 13 }, { wch: 16 }, { wch: 20 }, { wch: 12 }, { wch: 14 }];
   XLSX.utils.book_append_sheet(wb, ws1, "Tarefas");
 
   const ws2 = XLSX.utils.json_to_sheet(userRows);
-  ws2["!cols"] = [{ wch: 22 }, { wch: 16 }, { wch: 12 }, { wch: 15 }, { wch: 12 }, { wch: 20 }, { wch: 18 }, { wch: 17 }];
+  ws2["!cols"] = [{ wch: 22 }, { wch: 16 }, { wch: 12 }, { wch: 15 }, { wch: 12 }, { wch: 20 }];
   XLSX.utils.book_append_sheet(wb, ws2, "Por Colaborador");
 
   const ws3 = XLSX.utils.json_to_sheet(projectRows);
-  ws3["!cols"] = [{ wch: 22 }, { wch: 16 }, { wch: 12 }, { wch: 15 }, { wch: 12 }, { wch: 20 }, { wch: 18 }, { wch: 17 }];
+  ws3["!cols"] = [{ wch: 22 }, { wch: 16 }, { wch: 12 }, { wch: 15 }, { wch: 12 }, { wch: 20 }];
   XLSX.utils.book_append_sheet(wb, ws3, "Por Projeto");
 
   const date = new Date().toISOString().split("T")[0];

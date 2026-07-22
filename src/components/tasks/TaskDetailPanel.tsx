@@ -163,8 +163,6 @@ export default function TaskDetailPanel({ task, taskIndex, taskCount, onClose, o
   const [title, setTitle] = useState(task.title);
   const [situacaoAtual, setSituacaoAtual] = useState(task.situacaoAtual ?? "");
   const [impeditivo, setImpeditivo] = useState(task.impeditivo ?? "");
-  const [tempoEstimado, setTempoEstimado] = useState(task.tempoEstimado?.toString() ?? "");
-  const [tempoPrevisto, setTempoPrevisto] = useState(task.tempoPrevisto?.toString() ?? "");
   const [progress, setProgress] = useState(task.progress);
   const [subtasks, setSubtasks] = useState<Subtask[]>(task.subtasks ?? []);
   const [newSub, setNewSub] = useState("");
@@ -327,6 +325,7 @@ export default function TaskDetailPanel({ task, taskIndex, taskCount, onClose, o
         {/* Scrollable body */}
         <div className="flex-1 overflow-y-auto px-4 py-4 space-y-5">
 
+
           {/* Situação atual */}
           <Section title="Situação atual">
             {readOnly ? (
@@ -416,45 +415,6 @@ export default function TaskDetailPanel({ task, taskIndex, taskCount, onClose, o
                 </div>
               ))}
             </div>
-          </Section>
-
-          {/* Tempo */}
-          <Section title="Tempo (horas)">
-            {readOnly ? (
-              <div className="flex gap-4 text-xs text-surface-600">
-                <span>Estimado: {tempoEstimado ? `${tempoEstimado}h` : "—"}</span>
-                <span>Previsto: {tempoPrevisto ? `${tempoPrevisto}h` : "—"}</span>
-              </div>
-            ) : (
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <p className="text-[10px] text-surface-400 mb-1">Estimado</p>
-                <input
-                  type="number" min="0" step="0.5"
-                  value={tempoEstimado}
-                  onChange={(e) => setTempoEstimado(e.target.value)}
-                  onBlur={() => save({ tempoEstimado: tempoEstimado ? Number(tempoEstimado) : undefined })}
-                  className="w-full text-xs border border-surface-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-500/30"
-                  placeholder="ex: 40"
-                />
-              </div>
-              <div>
-                <p className="text-[10px] text-surface-400 mb-1">Previsto</p>
-                <input
-                  type="number" min="0" step="0.5"
-                  value={tempoPrevisto}
-                  onChange={(e) => setTempoPrevisto(e.target.value)}
-                  onBlur={() => save({ tempoPrevisto: tempoPrevisto ? Number(tempoPrevisto) : undefined })}
-                  className={`w-full text-xs border rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-500/30 ${
-                    tempoPrevisto && tempoEstimado && Number(tempoPrevisto) > Number(tempoEstimado)
-                      ? "border-amber-300 text-amber-700 bg-amber-50"
-                      : "border-surface-200"
-                  }`}
-                  placeholder="ex: 48"
-                />
-              </div>
-            </div>
-            )}
           </Section>
 
           {/* Progresso */}

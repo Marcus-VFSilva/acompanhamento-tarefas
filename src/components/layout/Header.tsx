@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
-import { LayoutDashboard, ListTodo, LogOut, FileBarChart2, Activity, Settings } from "lucide-react";
+import { LayoutDashboard, ListTodo, LogOut, FileBarChart2, FolderKanban, CalendarDays, CalendarRange, Settings } from "lucide-react";
 
 interface HeaderProps {
   userName?: string | null;
@@ -15,8 +15,10 @@ interface HeaderProps {
 const NAV = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/tarefas", label: "Tarefas", icon: ListTodo },
+  { href: "/projetos", label: "Projetos", icon: FolderKanban },
+  { href: "/calendario", label: "Calendário", icon: CalendarDays },
   { href: "/relatorios", label: "Relatórios", icon: FileBarChart2 },
-  // { href: "/monitoramento", label: "Monitoramento", icon: Activity },
+  { href: "/relatorio-semanal", label: "Report Semanal", icon: CalendarRange },
   { href: "/configuracoes", label: "Configurações", icon: Settings },
 ];
 

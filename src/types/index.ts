@@ -24,8 +24,6 @@ export interface Task {
   dueDate?: string;
   dataEntrega?: string;
   dataConclusao?: string;
-  tempoEstimado?: number;
-  tempoPrevisto?: number;
   createdAt: string;
   updatedAt: string;
   progress: number;

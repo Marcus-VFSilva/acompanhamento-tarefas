@@ -1,22 +1,22 @@
 "use client";
 
-import { useRef } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useTasksQuery } from "@/hooks/useTasks";
 import { useUserRole } from "@/hooks/useUserRole";
 import { buildCollaboratorData, buildProjectData } from "@/lib/reportMetrics";
-import { useSistemasQuery } from "@/hooks/useSistemas";
+import { startOfWeek, addDays, parseISODate } from "@/lib/calendar";
+import { buildWeeklyEvolution, getWeekStartISO } from "@/lib/weeklyReportMetrics";
 import {
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip,
   ResponsiveContainer, Legend, CartesianGrid,
 } from "recharts";
-import { CheckCircle2, Clock, ListTodo, AlertCircle, XCircle, Timer, Server } from "lucide-react";
+import { CheckCircle2, Clock, ListTodo, AlertCircle, XCircle } from "lucide-react";
 import ExportButtons from "@/components/export/ExportButtons";
 import OperationalReportButton from "@/components/export/OperationalReportButton";
 import { useSettingsQuery } from "@/hooks/useSettings";
 import type { Task } from "@/types";
+import { PRIORITY_LABELS } from "@/types";
 import { StatusBadge, PriorityBadge } from "@/components/tasks/StatusBadge";
-import { STATUS_SISTEMA } from "@/types/system";
-import Link from "next/link";
 
 interface Props { isAdmin: boolean; userEmail: string; userName: string; }
 
@@ -49,13 +49,50 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
   return <h2 className="text-sm font-bold text-surface-700">{children}</h2>;
 }
 
+type Period = "tudo" | "semana" | "mes";
+
+const PERIOD_LABELS: Record<Period, string> = {
+  tudo: "Tudo",
+  semana: "Semana atual",
+  mes: "Mês atual",
+};
+
+/** Data de referência da tarefa para o filtro de período. */
+function taskRefDate(t: Task): Date | null {
+  return parseISODate(t.dataConclusao || t.dataEntrega || t.dueDate || t.createdAt || "");
+}
+
+function periodBounds(period: Period): { start: Date; end: Date } | null {
+  if (period === "tudo") return null;
+  const now = new Date();
+  if (period === "semana") {
+    const start = startOfWeek(now);
+    start.setHours(0, 0, 0, 0);
+    const end = addDays(start, 6);
+    end.setHours(23, 59, 59, 999);
+    return { start, end };
+  }
+  const start = new Date(now.getFullYear(), now.getMonth(), 1);
+  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  end.setHours(23, 59, 59, 999);
+  return { start, end };
+}
+
 export default function RelatoriosClient({ isAdmin, userEmail, userName }: Props) {
   const exportRef = useRef<HTMLDivElement>(null);
   const { data: allTasks = [] } = useTasksQuery();
   const { data: settings } = useSettingsQuery();
   const { isTeamLeader, canViewTeam, teamLabel } = useUserRole(isAdmin);
-  const { data: sistemas = [] } = useSistemasQuery();
-  const tasks = allTasks;
+  const [period, setPeriod] = useState<Period>("tudo");
+
+  const tasks = useMemo(() => {
+    const bounds = periodBounds(period);
+    if (!bounds) return allTasks;
+    return allTasks.filter((t) => {
+      const ref = taskRefDate(t);
+      return ref !== null && ref >= bounds.start && ref <= bounds.end;
+    });
+  }, [allTasks, period]);
 
   const total = tasks.length;
   const concluido = tasks.filter((t) => t.status === "concluido").length;
@@ -63,8 +100,6 @@ export default function RelatoriosClient({ isAdmin, userEmail, userName }: Props
   const pendente = tasks.filter((t) => t.status === "pendente").length;
   const cancelado = tasks.filter((t) => t.status === "cancelado").length;
   const taxa = total > 0 ? Math.round((concluido / total) * 100) : 0;
-  const totalEst = tasks.reduce((s, t) => s + (t.tempoEstimado ?? 0), 0);
-  const totalPrev = tasks.reduce((s, t) => s + (t.tempoPrevisto ?? 0), 0);
   const comImpeditivo = tasks.filter((t) => t.impeditivo && t.impeditivo.trim()).length;
 
   const statusPie = [
@@ -77,20 +112,26 @@ export default function RelatoriosClient({ isAdmin, userEmail, userName }: Props
   const projectData = buildProjectData(tasks);
   const collaboratorData = buildCollaboratorData(tasks);
 
-  const sistemaStatusData = Object.entries(STATUS_SISTEMA).map(([key, val]) => ({
-    name: val.label,
-    value: sistemas.filter((s) => s.status === key).length,
-    color: val.color,
-  })).filter((d) => d.value > 0);
+  const priorityPie = useMemo(() => {
+    const colors: Record<string, string> = { alta: "#ef4444", media: "#f59e0b", baixa: "#94a3b8" };
+    return (["alta", "media", "baixa"] as const)
+      .map((p) => ({ name: PRIORITY_LABELS[p], value: tasks.filter((t) => t.priority === p).length, color: colors[p] }))
+      .filter((d) => d.value > 0);
+  }, [tasks]);
 
-  const tempoData = tasks
-    .filter((t) => t.tempoEstimado || t.tempoPrevisto)
-    .slice(0, 8)
-    .map((t) => ({
-      name: t.title.length > 20 ? t.title.slice(0, 20) + "…" : t.title,
-      estimado: t.tempoEstimado ?? 0,
-      previsto: t.tempoPrevisto ?? 0,
-    }));
+  const categoryData = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const t of tasks) {
+      const key = t.category?.trim() || "Sem categoria";
+      map.set(key, (map.get(key) ?? 0) + 1);
+    }
+    return Array.from(map.entries())
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value);
+  }, [tasks]);
+
+  // Evolução sempre sobre a base completa (independe do filtro de período).
+  const weeklyEvolution = useMemo(() => buildWeeklyEvolution(allTasks, getWeekStartISO(), 8), [allTasks]);
 
   return (
     <div className="p-4 md:p-6 max-w-[1300px] mx-auto space-y-6">
@@ -104,6 +145,20 @@ export default function RelatoriosClient({ isAdmin, userEmail, userName }: Props
             {isTeamLeader && teamLabel ? `${teamLabel} · ` : canViewTeam ? "Indicadores consolidados · " : "Seus indicadores · "}
             gerado em {new Date().toLocaleDateString("pt-BR")}
           </p>
+          <div className="mt-2.5 flex items-center bg-surface-100 rounded-lg p-0.5 gap-0.5 w-fit">
+            {(Object.keys(PERIOD_LABELS) as Period[]).map((p) => (
+              <button
+                key={p}
+                type="button"
+                onClick={() => setPeriod(p)}
+                className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-all ${
+                  period === p ? "bg-white shadow-sm text-surface-900" : "text-surface-400 hover:text-surface-700"
+                }`}
+              >
+                {PERIOD_LABELS[p]}
+              </button>
+            ))}
+          </div>
         </div>
         <div className="flex flex-col sm:flex-row items-end gap-3">
           <OperationalReportButton
@@ -128,8 +183,6 @@ export default function RelatoriosClient({ isAdmin, userEmail, userName }: Props
         <KpiCard label="Pendentes" value={pendente} icon={AlertCircle} accent="bg-surface-400" />
         <KpiCard label="Canceladas" value={cancelado} icon={XCircle} accent="bg-red-500" />
         <KpiCard label="Com impeditivo" value={comImpeditivo} icon={AlertCircle} accent="bg-amber-500" />
-        <KpiCard label="Total estimado" value={`${totalEst}h`} icon={Timer} accent="bg-violet-500" />
-        <KpiCard label="Total previsto" value={`${totalPrev}h`} sub={totalPrev > totalEst ? `+${totalPrev - totalEst}h acima do estimado` : undefined} icon={Timer} accent={totalPrev > totalEst ? "bg-amber-500" : "bg-brand-500"} />
       </div>
 
       {/* Charts row 1 */}
@@ -181,51 +234,52 @@ export default function RelatoriosClient({ isAdmin, userEmail, userName }: Props
         </div>
       )}
 
-      {/* Charts row 2 */}
+      {/* Charts row 2 — prioridade + categoria */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="bg-white rounded-xl border border-surface-200 p-5">
-          <SectionTitle>Tempo estimado vs. previsto (h)</SectionTitle>
+          <SectionTitle>Distribuição por prioridade</SectionTitle>
           <ResponsiveContainer width="100%" height={220} className="mt-3">
-            <BarChart data={tempoData} barGap={4} barSize={10}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-              <XAxis dataKey="name" tick={{ fontSize: 10 }} />
-              <YAxis tick={{ fontSize: 11 }} />
-              <Tooltip />
-              <Legend iconSize={8} />
-              <Bar dataKey="estimado" name="Estimado" fill="#044a42" radius={[3, 3, 0, 0]} />
-              <Bar dataKey="previsto" name="Previsto" fill="#f59e0b" radius={[3, 3, 0, 0]} />
-            </BarChart>
+            <PieChart>
+              <Pie data={priorityPie} cx="50%" cy="50%" innerRadius={55} outerRadius={85} paddingAngle={3} dataKey="value">
+                {priorityPie.map((e, i) => <Cell key={i} fill={e.color} />)}
+              </Pie>
+              <Tooltip formatter={(v) => [`${v}`, ""]} />
+              <Legend iconType="circle" iconSize={8} />
+            </PieChart>
           </ResponsiveContainer>
         </div>
 
-        {/* Sistemas por status */}
-        {sistemas.length > 0 && (
-          <div className="bg-white rounded-xl border border-surface-200 p-5">
-            <div className="flex items-center justify-between mb-3">
-              <SectionTitle>Sistemas por status</SectionTitle>
-              <Link href="/monitoramento" className="text-xs text-brand-500 font-medium hover:text-brand-600">
-                Ver mapa →
-              </Link>
-            </div>
-            <ResponsiveContainer width="100%" height={190} className="mt-3">
-              <PieChart>
-                <Pie data={sistemaStatusData} cx="50%" cy="50%" innerRadius={45} outerRadius={75} paddingAngle={3} dataKey="value">
-                  {sistemaStatusData.map((e, i) => <Cell key={i} fill={e.color} />)}
-                </Pie>
-                <Tooltip formatter={(v) => [`${v} sistema(s)`, ""]} />
-                <Legend iconType="circle" iconSize={8} />
-              </PieChart>
-            </ResponsiveContainer>
-            <div className="grid grid-cols-3 gap-2 mt-2">
-              {sistemaStatusData.map((d) => (
-                <div key={d.name} className="text-center">
-                  <p className="text-base font-bold" style={{ color: d.color }}>{d.value}</p>
-                  <p className="text-[9px] text-surface-400 leading-tight">{d.name}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        <div className="bg-white rounded-xl border border-surface-200 p-5">
+          <SectionTitle>Tarefas por categoria</SectionTitle>
+          <ResponsiveContainer width="100%" height={Math.max(220, categoryData.length * 34)} className="mt-3">
+            <BarChart data={categoryData} layout="vertical" barSize={14}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
+              <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
+              <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={110} />
+              <Tooltip />
+              <Bar dataKey="value" name="Tarefas" fill="#044a42" radius={[0, 4, 4, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* Charts row 3 — evolução semanal */}
+      <div className="bg-white rounded-xl border border-surface-200 p-5">
+        <div className="flex items-center justify-between">
+          <SectionTitle>Evolução semanal (últimas 8 semanas)</SectionTitle>
+          <span className="text-[11px] text-surface-400">Concluídas x planejadas</span>
+        </div>
+        <ResponsiveContainer width="100%" height={240} className="mt-3">
+          <BarChart data={weeklyEvolution} barGap={4}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+            <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+            <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+            <Tooltip />
+            <Legend iconType="circle" iconSize={8} />
+            <Bar dataKey="planejadas" name="Planejadas" fill="#94a3b8" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="concluidas" name="Concluídas" fill="#044a42" radius={[4, 4, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
       </div>
 
       {/* Detailed table */}
@@ -238,7 +292,7 @@ export default function RelatoriosClient({ isAdmin, userEmail, userName }: Props
           <table className="w-full border-collapse">
             <thead>
               <tr className="bg-surface-50">
-                {["Título", "Responsável", "Projeto", "Status", "Prioridade", "Situação atual", "Prazo", "Entrega", "Conclusão", "T.Est", "T.Prev", "%"].map((h) => (
+                {["Título", "Responsável", "Projeto", "Status", "Prioridade", "Situação atual", "Prazo", "Entrega", "Conclusão", "%"].map((h) => (
                   <th key={h} className="px-3 py-2 text-left text-[10px] font-bold uppercase tracking-wider text-surface-400 border-b border-surface-200 whitespace-nowrap">
                     {h}
                   </th>
@@ -261,14 +315,6 @@ export default function RelatoriosClient({ isAdmin, userEmail, userName }: Props
                   <td className="px-3 py-2.5 text-xs text-surface-500 whitespace-nowrap tabular-nums">{t.dueDate || "—"}</td>
                   <td className="px-3 py-2.5 text-xs text-surface-500 whitespace-nowrap tabular-nums">{t.dataEntrega || "—"}</td>
                   <td className="px-3 py-2.5 text-xs text-surface-500 whitespace-nowrap tabular-nums">{t.dataConclusao || "—"}</td>
-                  <td className="px-3 py-2.5 text-xs text-surface-500 tabular-nums">{t.tempoEstimado != null ? `${t.tempoEstimado}h` : "—"}</td>
-                  <td className="px-3 py-2.5 text-xs tabular-nums">
-                    {t.tempoPrevisto != null ? (
-                      <span className={t.tempoPrevisto > (t.tempoEstimado ?? 0) ? "text-amber-600 font-medium" : "text-surface-500"}>
-                        {t.tempoPrevisto}h
-                      </span>
-                    ) : "—"}
-                  </td>
                   <td className="px-3 py-2.5">
                     <div className="flex items-center gap-1.5 min-w-[70px]">
                       <div className="flex-1 h-1.5 bg-surface-100 rounded-full overflow-hidden">

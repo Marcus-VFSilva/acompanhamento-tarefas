@@ -1,8 +1,8 @@
 import { MongoClient, Db, Collection, ObjectId } from "mongodb";
 import type { Task } from "@/types";
-import type { SystemObservation } from "@/types/system";
 import type { Note } from "@/types/note";
 import type { Project, UserSettings } from "@/types/project";
+import type { WeeklyReport } from "@/types/weeklyReport";
 import { toObjectId } from "@/lib/objectId";
 
 const uri = process.env.MONGODB_URI!;
@@ -28,11 +28,6 @@ export async function getDb(): Promise<Db> {
 export async function getTasksCollection(): Promise<Collection> {
   const db = await getDb();
   return db.collection("tasks");
-}
-
-export async function getSystemsObsCollection(): Promise<Collection> {
-  const db = await getDb();
-  return db.collection("systems_obs");
 }
 
 function toIdString(value: ObjectId | string): string {
@@ -64,11 +59,6 @@ export function serializeTask(doc: any): Task {
   } as Task;
 }
 
-export function serializeSystemObs(doc: any): SystemObservation {
-  const { _id, ...rest } = doc;
-  return rest as SystemObservation;
-}
-
 export async function getNotasCollection(): Promise<Collection> {
   const db = await getDb();
   return db.collection("notas");
@@ -82,6 +72,20 @@ export async function getProjectsCollection(): Promise<Collection> {
 export async function getUserSettingsCollection(): Promise<Collection> {
   const db = await getDb();
   return db.collection("user_settings");
+}
+
+export async function getWeeklyReportsCollection(): Promise<Collection> {
+  const db = await getDb();
+  return db.collection("weekly_reports");
+}
+
+export function serializeWeeklyReport(doc: any): WeeklyReport {
+  const { _id, userId, ...rest } = doc;
+  return {
+    ...rest,
+    id: toIdString(_id),
+    userId: userId ? toIdString(userId) : "",
+  } as WeeklyReport;
 }
 
 export function serializeProject(doc: any): Project {

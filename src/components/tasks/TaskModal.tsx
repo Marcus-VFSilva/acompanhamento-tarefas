@@ -70,8 +70,6 @@ export default function TaskModal({ task, userId, userName, isAdmin, users, onCl
   const [projeto, setProjeto] = useState(task?.projeto ?? "");
   const [situacaoAtual, setSituacaoAtual] = useState(task?.situacaoAtual ?? "");
   const [impeditivo, setImpeditivo] = useState(task?.impeditivo ?? "");
-  const [tempoEstimado, setTempoEstimado] = useState<string>(task?.tempoEstimado?.toString() ?? "");
-  const [tempoPrevisto, setTempoPrevisto] = useState<string>(task?.tempoPrevisto?.toString() ?? "");
   const [progress, setProgress] = useState(task?.progress ?? 0);
   const [assignedUserId, setAssignedUserId] = useState(task?.assignedUserId ?? userId);
   const [assignedToName, setAssignedToName] = useState(task?.assignedToName ?? userName);
@@ -115,8 +113,6 @@ export default function TaskModal({ task, userId, userName, isAdmin, users, onCl
       projeto,
       situacaoAtual: situacaoAtual.trim(),
       impeditivo: impeditivo.trim(),
-      tempoEstimado: tempoEstimado ? Number(tempoEstimado) : undefined,
-      tempoPrevisto: tempoPrevisto ? Number(tempoPrevisto) : undefined,
       progress,
       assignedUserId,
       assignedToName,
@@ -215,18 +211,6 @@ export default function TaskModal({ task, userId, userName, isAdmin, users, onCl
             </Field>
             <Field label="Data de conclusão">
               <input type="date" value={dataConclusao} onChange={(e) => setDataConclusao(e.target.value)} className={INPUT} />
-            </Field>
-          </div>
-
-          {/* ── Tempo ── */}
-          <SectionTitle>Tempo (horas)</SectionTitle>
-
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Tempo estimado">
-              <input type="number" min="0" step="0.5" value={tempoEstimado} onChange={(e) => setTempoEstimado(e.target.value)} className={INPUT} placeholder="Ex: 40" />
-            </Field>
-            <Field label="Tempo previsto">
-              <input type="number" min="0" step="0.5" value={tempoPrevisto} onChange={(e) => setTempoPrevisto(e.target.value)} className={INPUT} placeholder="Ex: 48" />
             </Field>
           </div>
 

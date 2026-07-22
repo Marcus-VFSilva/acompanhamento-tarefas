@@ -20,6 +20,8 @@ async function seedIfEmpty(collection: Awaited<ReturnType<typeof getProjectsColl
       _id: generateId(),
       name,
       active: true,
+      objetivo: "",
+      status: "em_andamento",
       createdAt: today,
       updatedAt: today,
     }));
@@ -52,7 +54,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { name } = await req.json();
+    const { name, objetivo, status } = await req.json();
     const trimmed = (name ?? "").trim();
     if (!trimmed) {
       return NextResponse.json({ error: "Nome obrigatório" }, { status: 400 });
@@ -70,6 +72,8 @@ export async function POST(req: NextRequest) {
       _id: id,
       name: trimmed,
       active: true,
+      objetivo: typeof objetivo === "string" ? objetivo.trim() : "",
+      status: status ?? "em_andamento",
       createdByUserId: new ObjectId(session.user.id),
       createdAt: today,
       updatedAt: today,

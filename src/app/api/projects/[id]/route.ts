@@ -27,6 +27,8 @@ export async function PUT(req: NextRequest, { params }: Params) {
     const updates: Record<string, unknown> = { updatedAt: now() };
     if (body.name !== undefined) updates.name = String(body.name).trim();
     if (body.active !== undefined) updates.active = Boolean(body.active);
+    if (body.objetivo !== undefined) updates.objetivo = String(body.objetivo).trim();
+    if (body.status !== undefined) updates.status = body.status;
 
     await collection.updateOne({ _id: id as any }, { $set: updates });
     const refreshed = await collection.findOne({ _id: id as any });

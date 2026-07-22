@@ -1,7 +1,13 @@
 "use client";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import type { Project } from "@/types/project";
+import type { Project, ProjectStatus } from "@/types/project";
+
+export interface CreateProjectInput {
+  name: string;
+  objetivo?: string;
+  status?: ProjectStatus;
+}
 
 export function useProjectsQuery() {
   return useQuery<Project[]>({
@@ -18,11 +24,12 @@ export function useProjectsQuery() {
 export function useCreateProject() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (name: string) => {
+    mutationFn: async (input: string | CreateProjectInput) => {
+      const payload = typeof input === "string" ? { name: input } : input;
       const res = await fetch("/api/projects", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name }),
+        body: JSON.stringify(payload),
       });
       if (!res.ok) throw new Error("Erro ao criar projeto");
       return res.json() as Promise<Project>;
@@ -34,7 +41,7 @@ export function useCreateProject() {
 export function useUpdateProject() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, updates }: { id: string; updates: Partial<Pick<Project, "name" | "active">> }) => {
+    mutationFn: async ({ id, updates }: { id: string; updates: Partial<Pick<Project, "name" | "active" | "objetivo" | "status">> }) => {
       const res = await fetch(`/api/projects/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },

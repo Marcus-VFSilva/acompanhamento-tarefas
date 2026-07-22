@@ -1,4 +1,4 @@
-import { ShieldCheck, ListChecks, Server, BarChart3, FileSpreadsheet } from "lucide-react";
+import { ShieldCheck, ListChecks, CalendarDays, BarChart3, FileSpreadsheet } from "lucide-react";
 
 const FEATURES = [
   {
@@ -7,26 +7,20 @@ const FEATURES = [
     desc: "Crie, priorize e acompanhe tarefas com status, prazos, progresso e subtarefas.",
   },
   {
-    icon: Server,
-    title: "Mapa de Sistemas",
-    desc: "Todos os sistemas do grupo em um mapa interativo com conexões e observações.",
+    icon: CalendarDays,
+    title: "Calendário & Agenda",
+    desc: "Reuniões, anotações e lembretes organizados por semana e mês.",
   },
   {
     icon: BarChart3,
     title: "Dashboards & Relatórios",
-    desc: "Métricas consolidadas em painel diário com gráficos e lembretes.",
+    desc: "Métricas consolidadas em painel diário e relatório semanal com gráficos.",
   },
   {
     icon: FileSpreadsheet,
     title: "Exportação Excel",
     desc: "Relatórios completos para compartilhar com a gestão ou arquivar histórico.",
   },
-];
-
-const SYSTEM_SNAPSHOT = [
-  { label: "Sistemas estáveis", value: "8 sistemas", dot: "bg-blue-400" },
-  { label: "Em desenvolvimento", value: "5 sistemas", dot: "bg-purple-400" },
-  { label: "Em implantação", value: "3 sistemas", dot: "bg-emerald-400" },
 ];
 
 export default function AuthMarketingPanel() {
@@ -62,7 +56,7 @@ export default function AuthMarketingPanel() {
             <span className="text-brand-300">Gestão Operacional</span>
           </h1>
           <p className="text-white/45 text-[15px] leading-relaxed max-w-[360px]">
-            Acompanhe tarefas, monitore sistemas e acesse métricas em tempo real — tudo em uma plataforma integrada.
+            Acompanhe tarefas, organize sua agenda e acesse métricas em tempo real — tudo em uma plataforma integrada.
           </p>
         </div>
 
@@ -83,28 +77,6 @@ export default function AuthMarketingPanel() {
         <div className="flex items-center gap-2">
           <ShieldCheck size={13} className="text-brand-400/70" />
           <span className="text-white/25 text-[11px]">Acesso restrito · apenas colaboradores autorizados</span>
-        </div>
-      </div>
-
-      <div className="absolute bottom-10 right-8 w-60 pointer-events-none select-none">
-        <div className="bg-white/6 border border-white/10 rounded-2xl p-4 backdrop-blur-sm shadow-2xl">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <Server size={12} className="text-brand-300" />
-              <span className="text-white/50 text-[11px] font-semibold uppercase tracking-wider">Sistemas</span>
-            </div>
-          </div>
-          <div className="space-y-2.5">
-            {SYSTEM_SNAPSHOT.map(({ label, value, dot }) => (
-              <div key={label} className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <div className={`w-1.5 h-1.5 rounded-full ${dot} shrink-0`} />
-                  <span className="text-white/35 text-[11px]">{label}</span>
-                </div>
-                <span className="text-white/65 text-[11px] font-semibold tabular-nums">{value}</span>
-              </div>
-            ))}
-          </div>
         </div>
       </div>
     </div>

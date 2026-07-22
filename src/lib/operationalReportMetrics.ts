@@ -1,6 +1,7 @@
 import type { Task } from "@/types";
-import { STATUS_LABELS } from "@/types";
+import { STATUS_LABELS, PRIORITY_LABELS } from "@/types";
 import { buildCollaboratorData, buildProjectData } from "@/lib/reportMetrics";
+import { buildWeeklyEvolution, getWeekStartISO, type WeekEvolutionPoint } from "@/lib/weeklyReportMetrics";
 
 export interface OperationalReportContext {
   reporterName: string;
@@ -16,10 +17,11 @@ export interface OperationalReportMetrics {
   pendente: number;
   cancelado: number;
   taxaConclusao: number;
-  totalEstimado: number;
-  totalPrevisto: number;
   comImpeditivo: number;
   statusBreakdown: { label: string; value: number; pct: number }[];
+  priorityBreakdown: { label: string; value: number; pct: number }[];
+  categoryBreakdown: { label: string; value: number }[];
+  weeklyEvolution: WeekEvolutionPoint[];
   projectSummary: ReturnType<typeof buildProjectData>;
   collaboratorSummary: ReturnType<typeof buildCollaboratorData>;
   impeditivos: Task[];
@@ -74,8 +76,6 @@ export function buildOperationalReportMetrics(tasks: Task[]): OperationalReportM
   const pendente = tasks.filter((t) => t.status === "pendente").length;
   const cancelado = tasks.filter((t) => t.status === "cancelado").length;
   const taxaConclusao = total > 0 ? Math.round((concluido / total) * 100) : 0;
-  const totalEstimado = tasks.reduce((s, t) => s + (t.tempoEstimado ?? 0), 0);
-  const totalPrevisto = tasks.reduce((s, t) => s + (t.tempoPrevisto ?? 0), 0);
   const comImpeditivo = tasks.filter((t) => t.impeditivo?.trim()).length;
 
   const statusBreakdown = (["concluido", "em_andamento", "pendente", "cancelado"] as const)
@@ -89,6 +89,28 @@ export function buildOperationalReportMetrics(tasks: Task[]): OperationalReportM
     })
     .filter((s) => s.value > 0);
 
+  const priorityBreakdown = (["alta", "media", "baixa"] as const)
+    .map((priority) => {
+      const value = tasks.filter((t) => t.priority === priority).length;
+      return {
+        label: PRIORITY_LABELS[priority],
+        value,
+        pct: total > 0 ? Math.round((value / total) * 100) : 0,
+      };
+    })
+    .filter((p) => p.value > 0);
+
+  const categoryMap = new Map<string, number>();
+  for (const t of tasks) {
+    const key = t.category?.trim() || "Sem categoria";
+    categoryMap.set(key, (categoryMap.get(key) ?? 0) + 1);
+  }
+  const categoryBreakdown = Array.from(categoryMap.entries())
+    .map(([label, value]) => ({ label, value }))
+    .sort((a, b) => b.value - a.value);
+
+  const weeklyEvolution = buildWeeklyEvolution(tasks, getWeekStartISO(), 8);
+
   return {
     total,
     concluido,
@@ -96,10 +118,11 @@ export function buildOperationalReportMetrics(tasks: Task[]): OperationalReportM
     pendente,
     cancelado,
     taxaConclusao,
-    totalEstimado,
-    totalPrevisto,
     comImpeditivo,
     statusBreakdown,
+    priorityBreakdown,
+    categoryBreakdown,
+    weeklyEvolution,
     projectSummary: buildProjectData(tasks),
     collaboratorSummary: buildCollaboratorData(tasks),
     impeditivos: tasks.filter((t) => t.impeditivo?.trim()),
@@ -156,7 +179,6 @@ export function buildEmailBody(
     `• Em andamento: ${metrics.emAndamento}`,
     `• Pendentes: ${metrics.pendente}`,
     `• Com impeditivo: ${metrics.comImpeditivo}`,
-    `• Horas estimadas: ${metrics.totalEstimado}h | previstas: ${metrics.totalPrevisto}h`,
     "",
     "Anexos incluídos neste e-mail:",
     `• ${filenames.excel} — detalhamento completo das tarefas (Excel estilizado)`,
@@ -205,7 +227,6 @@ export function buildEmailHtmlBody(
     `Em andamento: ${metrics.emAndamento}`,
     `Pendentes: ${metrics.pendente}`,
     `Com impeditivo: ${metrics.comImpeditivo}`,
-    `Horas estimadas: ${metrics.totalEstimado}h | previstas: ${metrics.totalPrevisto}h`,
   ];
 
   const attachmentItems = [
