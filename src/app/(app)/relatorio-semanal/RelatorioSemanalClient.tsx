@@ -1,19 +1,24 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import {
   ChevronLeft, ChevronRight, Loader2, Save, Sparkles, Printer,
   TrendingUp, CheckCircle2, AlertTriangle, Lightbulb, CalendarClock, Check, ListTodo,
+  FolderKanban, ChevronRight as ArrowIcon,
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, CartesianGrid,
 } from "recharts";
 import { useTasksQuery } from "@/hooks/useTasks";
+import { useProjectsQuery } from "@/hooks/useProjects";
 import { useWeeklyReportQuery, useSaveWeeklyReport } from "@/hooks/useWeeklyReport";
 import {
-  getWeekStartISO, weekBoundsFromISO, buildWeeklyAutofill, buildWeeklyEvolution,
+  getWeekStartISO, weekBoundsFromISO, buildWeeklyAutofill, buildDailyEvolution,
   getWeekTasks, type WeekTaskReason,
 } from "@/lib/weeklyReportMetrics";
+import { buildProjectKpis, tasksForProject } from "@/lib/projectMetrics";
+import { PROJECT_STATUS_LABEL, PROJECT_STATUS_COLOR, type ProjectStatus } from "@/types/project";
 import { addDays, toISODate } from "@/lib/calendar";
 import { StatusBadge, PriorityBadge } from "@/components/tasks/StatusBadge";
 
@@ -64,6 +69,7 @@ function ReportSection({ title, icon: Icon, accent, value, onChange, placeholder
 export default function RelatorioSemanalClient({ userName }: Props) {
   const [weekStart, setWeekStart] = useState(() => getWeekStartISO());
   const { data: tasks = [], isLoading: tasksLoading } = useTasksQuery();
+  const { data: projects = [] } = useProjectsQuery();
   const reportQuery = useWeeklyReportQuery(weekStart);
   const save = useSaveWeeklyReport();
   const printRef = useRef<HTMLDivElement>(null);
@@ -100,8 +106,31 @@ export default function RelatorioSemanalClient({ userName }: Props) {
     }
   }, [weekStart, saved, reportQuery.isLoading, tasksLoading, tasks]);
 
-  const evolution = useMemo(() => buildWeeklyEvolution(tasks, weekStart, 8), [tasks, weekStart]);
+  const dailyEvolution = useMemo(() => buildDailyEvolution(tasks, weekStart), [tasks, weekStart]);
   const weekTasks = useMemo(() => getWeekTasks(tasks, weekStart), [tasks, weekStart]);
+
+  // Projetos que tiveram tarefas movimentadas nesta semana.
+  const weekProjects = useMemo(() => {
+    const names = new Set<string>();
+    for (const { task } of weekTasks) {
+      const n = task.projeto?.trim();
+      if (n) names.add(n);
+    }
+    return Array.from(names)
+      .map((name) => {
+        const proj = projects.find((p) => p.name === name);
+        const kpis = buildProjectKpis(tasksForProject(tasks, name));
+        const movidas = weekTasks.filter(({ task }) => (task.projeto?.trim() || "") === name).length;
+        return {
+          name,
+          id: proj?.id,
+          status: (proj?.status ?? "em_andamento") as ProjectStatus,
+          kpis,
+          movidas,
+        };
+      })
+      .sort((a, b) => b.movidas - a.movidas);
+  }, [weekTasks, projects, tasks]);
 
   const summary = useMemo(() => {
     const auto = buildWeeklyAutofill(tasks, weekStart);
@@ -254,6 +283,62 @@ export default function RelatorioSemanalClient({ userName }: Props) {
           />
         </div>
 
+        {/* Projetos trabalhados na semana */}
+        <div className="bg-white rounded-xl border border-surface-200 overflow-hidden">
+          <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-surface-100">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 rounded-lg bg-violet-500">
+                <FolderKanban size={14} className="text-white" />
+              </div>
+              <h2 className="text-sm font-bold text-surface-700">Projetos em andamento nesta semana</h2>
+            </div>
+            <span className="text-xs text-surface-400">{weekProjects.length} projeto(s)</span>
+          </div>
+
+          {weekProjects.length === 0 ? (
+            <p className="px-4 py-6 text-sm text-surface-400 text-center">
+              Nenhuma tarefa vinculada a projetos foi movimentada nesta semana.
+            </p>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-4">
+              {weekProjects.map((p) => {
+                const scc = PROJECT_STATUS_COLOR[p.status];
+                const inner = (
+                  <>
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="text-sm font-semibold text-surface-800 leading-snug group-hover:text-brand-700">{p.name}</span>
+                      {p.id && <ArrowIcon size={14} className="text-surface-300 group-hover:text-brand-500 shrink-0" />}
+                    </div>
+                    <div className="flex items-center gap-2 mt-1.5">
+                      <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full ${scc.bg} ${scc.text}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${scc.dot}`} />
+                        {PROJECT_STATUS_LABEL[p.status]}
+                      </span>
+                      <span className="text-[11px] text-surface-400">{p.movidas} movimentada(s)</span>
+                    </div>
+                    <div className="mt-3">
+                      <div className="flex items-center justify-between text-[11px] text-surface-400 mb-1">
+                        <span>{p.kpis.concluido}/{p.kpis.total} concluídas</span>
+                        <span className="font-semibold text-brand-600 tabular-nums">{p.kpis.taxaConclusao}%</span>
+                      </div>
+                      <div className="h-1.5 bg-surface-100 rounded-full overflow-hidden">
+                        <div className="h-full bg-brand-500 rounded-full" style={{ width: `${p.kpis.taxaConclusao}%` }} />
+                      </div>
+                    </div>
+                  </>
+                );
+                return p.id ? (
+                  <Link key={p.name} href={`/projetos/${p.id}`} className="group rounded-xl border border-surface-200 p-4 hover:border-brand-400/50 hover:shadow-sm transition-all">
+                    {inner}
+                  </Link>
+                ) : (
+                  <div key={p.name} className="rounded-xl border border-surface-200 p-4">{inner}</div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
         {/* Tarefas movimentadas na semana */}
         <div className="bg-white rounded-xl border border-surface-200 overflow-hidden">
           <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-surface-100">
@@ -286,7 +371,14 @@ export default function RelatorioSemanalClient({ userName }: Props) {
                   {weekTasks.map(({ task: t, reasons }) => (
                     <tr key={t.id} className="hover:bg-surface-50/60 border-b border-surface-100 last:border-0">
                       <td className="px-3 py-2.5 text-xs font-medium text-surface-900 max-w-[240px]">
-                        <span title={t.title}>{t.title.length > 40 ? t.title.slice(0, 40) + "…" : t.title}</span>
+                        <Link
+                          href={`/tarefas?task=${t.id}`}
+                          title={`Abrir "${t.title}" nas tarefas`}
+                          className="group inline-flex items-center gap-1 text-surface-900 hover:text-brand-700"
+                        >
+                          <span>{t.title.length > 40 ? t.title.slice(0, 40) + "…" : t.title}</span>
+                          <ArrowIcon size={12} className="text-surface-300 group-hover:text-brand-500 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                        </Link>
                       </td>
                       <td className="px-3 py-2.5 text-xs text-surface-500 whitespace-nowrap">{t.projeto || "—"}</td>
                       <td className="px-3 py-2.5"><StatusBadge status={t.status} /></td>
@@ -316,15 +408,18 @@ export default function RelatorioSemanalClient({ userName }: Props) {
           )}
         </div>
 
-        {/* Evolution chart */}
+        {/* Evolução da semana (dia a dia) */}
         <div className="bg-white rounded-xl border border-surface-200 p-5">
-          <div className="flex items-center gap-2 mb-3">
-            <TrendingUp size={15} className="text-brand-600" />
-            <h2 className="text-sm font-bold text-surface-700">Evolução das últimas 8 semanas</h2>
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <TrendingUp size={15} className="text-brand-600" />
+              <h2 className="text-sm font-bold text-surface-700">Evolução da semana (dia a dia)</h2>
+            </div>
+            <span className="text-[11px] text-surface-400">Concluídas x planejadas por dia</span>
           </div>
           <ResponsiveContainer width="100%" height={240}>
-            <BarChart data={evolution} barGap={4} barSize={14}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+            <BarChart data={dailyEvolution} barGap={4} barSize={16}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
               <XAxis dataKey="label" tick={{ fontSize: 11 }} />
               <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
               <Tooltip formatter={(v, name) => [v as number, name === "concluidas" ? "Concluídas" : "Planejadas"]} />

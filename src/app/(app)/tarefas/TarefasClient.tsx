@@ -2,13 +2,13 @@
 
 
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 
 import { Plus, Search, X, Filter, Eye, Focus, Table2 } from "lucide-react";
 
 import { useTaskStore, DEFAULT_FILTERS } from "@/store/taskStore";
 
-import { useFilteredTasks, useUsersQuery } from "@/hooks/useTasks";
+import { useFilteredTasks, useUsersQuery, useTasksQuery } from "@/hooks/useTasks";
 
 import { useUserRole } from "@/hooks/useUserRole";
 
@@ -90,7 +90,31 @@ export default function TarefasClient({ isAdmin, userId, userEmail, userName }: 
 
   const tasks = useFilteredTasks(userId, canViewTeam);
 
+  const { data: allTasks = [] } = useTasksQuery();
+
   const { data: users = [] } = useUsersQuery();
+
+  // Deep-link: abre a tarefa indicada em ?task=<id> (ex.: vindo do report semanal / projetos)
+
+  const deepLinkRef = useRef<string | null>(null);
+
+  useEffect(() => {
+
+    const id = new URLSearchParams(window.location.search).get("task");
+
+    if (!id || deepLinkRef.current === id) return;
+
+    const found = allTasks.find((t) => t.id === id);
+
+    if (found) {
+
+      deepLinkRef.current = id;
+
+      setSelectedTask(found);
+
+    }
+
+  }, [allTasks]);
 
 
 

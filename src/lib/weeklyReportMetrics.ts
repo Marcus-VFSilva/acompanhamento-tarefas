@@ -110,6 +110,32 @@ export interface WeekEvolutionPoint {
   planejadas: number;
 }
 
+const DAY_LABELS = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
+
+/** Evolução dia a dia (Seg→Dom) da semana selecionada: concluídas x planejadas. */
+export function buildDailyEvolution(tasks: Task[], weekStartISO: string): WeekEvolutionPoint[] {
+  const start = parseISODate(weekStartISO) ?? startOfWeek(new Date());
+  const points: WeekEvolutionPoint[] = [];
+
+  for (let i = 0; i < 7; i++) {
+    const day = addDays(start, i);
+    day.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(day);
+    dayEnd.setHours(23, 59, 59, 999);
+
+    const concluidas = tasks.filter((t) => inRange(completedDate(t), day, dayEnd)).length;
+    const planejadas = tasks.filter((t) => inRange(plannedDate(t), day, dayEnd)).length;
+
+    points.push({
+      label: `${DAY_LABELS[i]} ${day.getDate().toString().padStart(2, "0")}`,
+      concluidas,
+      planejadas,
+    });
+  }
+
+  return points;
+}
+
 /** Concluídas x planejadas por semana, para as últimas `weeks` semanas. */
 export function buildWeeklyEvolution(tasks: Task[], refWeekStartISO: string, weeks = 8): WeekEvolutionPoint[] {
   const refStart = parseISODate(refWeekStartISO) ?? startOfWeek(new Date());
