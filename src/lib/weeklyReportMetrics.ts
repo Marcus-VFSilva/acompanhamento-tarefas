@@ -104,6 +104,45 @@ export function getWeekTasks(tasks: Task[], weekStartISO: string): WeekTaskItem[
   });
 }
 
+export interface ProjectWeekBreakdown {
+  /** Tarefas concluídas nesta semana (Principais avanços). */
+  avancos: Task[];
+  /** Tarefas ativas a atacar (Planejamento / foco da semana). */
+  foco: Task[];
+  /** Tarefas ativas com impeditivo (Impeditivos e sugestões). */
+  impeditivos: Task[];
+}
+
+const PRIORITY_RANK: Record<string, number> = { alta: 0, media: 1, baixa: 2 };
+
+/**
+ * Divide as tarefas de um projeto respondendo às perguntas de sexta:
+ * avanços (concluídas na semana), foco (ativas a atacar) e impeditivos.
+ */
+export function buildProjectWeekBreakdown(projectTasks: Task[], weekStartISO: string): ProjectWeekBreakdown {
+  const { start, end } = weekBoundsFromISO(weekStartISO);
+
+  const avancos = projectTasks
+    .filter((t) => inRange(completedDate(t), start, end))
+    .sort((a, b) => (completedDate(b) || "").localeCompare(completedDate(a) || ""));
+
+  const active = projectTasks.filter((t) => t.status === "pendente" || t.status === "em_andamento");
+
+  const foco = [...active].sort((a, b) => {
+    const sa = a.status === "em_andamento" ? 0 : 1;
+    const sb = b.status === "em_andamento" ? 0 : 1;
+    if (sa !== sb) return sa - sb;
+    const pa = PRIORITY_RANK[a.priority] ?? 3;
+    const pb = PRIORITY_RANK[b.priority] ?? 3;
+    if (pa !== pb) return pa - pb;
+    return (plannedDate(a) || "9999").localeCompare(plannedDate(b) || "9999");
+  });
+
+  const impeditivos = active.filter((t) => t.impeditivo?.trim());
+
+  return { avancos, foco, impeditivos };
+}
+
 export interface WeekEvolutionPoint {
   label: string;
   concluidas: number;
@@ -111,6 +150,38 @@ export interface WeekEvolutionPoint {
 }
 
 const DAY_LABELS = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
+
+export interface WeekMovementPoint {
+  label: string;
+  criadas: number;
+  atualizadas: number;
+  concluidas: number;
+}
+
+/**
+ * Movimentação dia a dia (Seg→Dom) da semana selecionada:
+ * criadas (createdAt), atualizadas (updatedAt) e concluídas (data de conclusão).
+ */
+export function buildWeeklyMovement(tasks: Task[], weekStartISO: string): WeekMovementPoint[] {
+  const start = parseISODate(weekStartISO) ?? startOfWeek(new Date());
+  const points: WeekMovementPoint[] = [];
+
+  for (let i = 0; i < 7; i++) {
+    const day = addDays(start, i);
+    day.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(day);
+    dayEnd.setHours(23, 59, 59, 999);
+
+    points.push({
+      label: `${DAY_LABELS[i]} ${day.getDate().toString().padStart(2, "0")}`,
+      criadas: tasks.filter((t) => inRange(t.createdAt, day, dayEnd)).length,
+      atualizadas: tasks.filter((t) => inRange(t.updatedAt, day, dayEnd)).length,
+      concluidas: tasks.filter((t) => inRange(completedDate(t), day, dayEnd)).length,
+    });
+  }
+
+  return points;
+}
 
 /** Evolução dia a dia (Seg→Dom) da semana selecionada: concluídas x planejadas. */
 export function buildDailyEvolution(tasks: Task[], weekStartISO: string): WeekEvolutionPoint[] {

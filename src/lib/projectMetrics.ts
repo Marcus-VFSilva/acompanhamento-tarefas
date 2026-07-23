@@ -1,4 +1,5 @@
 import type { Task } from "@/types";
+import { addDays } from "@/lib/calendar";
 
 /** Tarefas pertencentes a um projeto (comparação pelo rótulo `projeto`). */
 export function tasksForProject(tasks: Task[], projectName: string): Task[] {
@@ -63,6 +64,46 @@ export function buildSCurve(tasks: Task[]): SCurvePoint[] {
       realizado: Math.round((completedCount / total) * 100),
     };
   });
+}
+
+/**
+ * Curva em S limitada a uma janela [start, end], com um ponto por dia.
+ * Os acumulados (planejado/realizado) consideram TODAS as datas até cada dia,
+ * então o % permanece correto mesmo mostrando apenas o recorte da janela.
+ */
+export function buildSCurveWindow(tasks: Task[], start: Date, end: Date): SCurvePoint[] {
+  const total = tasks.length;
+  if (total === 0) return [];
+
+  const plannedTimes = tasks
+    .map((t) => parseDateOnly(plannedDate(t)))
+    .filter((d): d is Date => d !== null)
+    .map((d) => d.getTime());
+  const completedTimes = tasks
+    .map((t) => parseDateOnly(completedDate(t)))
+    .filter((d): d is Date => d !== null)
+    .map((d) => d.getTime());
+
+  if (plannedTimes.length === 0 && completedTimes.length === 0) return [];
+
+  const points: SCurvePoint[] = [];
+  let cur = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+  const last = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+
+  while (cur.getTime() <= last.getTime()) {
+    const dayEnd = new Date(cur.getFullYear(), cur.getMonth(), cur.getDate(), 23, 59, 59, 999).getTime();
+    const plannedCount = plannedTimes.filter((x) => x <= dayEnd).length;
+    const completedCount = completedTimes.filter((x) => x <= dayEnd).length;
+    points.push({
+      date: `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, "0")}-${String(cur.getDate()).padStart(2, "0")}`,
+      label: cur.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" }),
+      planejado: Math.round((plannedCount / total) * 100),
+      realizado: Math.round((completedCount / total) * 100),
+    });
+    cur = addDays(cur, 1);
+  }
+
+  return points;
 }
 
 export interface ProjectKpis {
