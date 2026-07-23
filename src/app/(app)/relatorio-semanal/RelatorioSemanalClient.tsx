@@ -5,22 +5,19 @@ import Link from "next/link";
 import {
   ChevronLeft, ChevronRight, Loader2, Save, Sparkles, Printer,
   TrendingUp, CheckCircle2, AlertTriangle, Lightbulb, CalendarClock, Check, ListTodo,
-  FolderKanban, ChevronRight as ArrowIcon, PlusCircle, RefreshCw, Activity, PieChart as PieIcon,
-  Target,
+  FolderKanban, PlusCircle, RefreshCw, Activity, PieChart as PieIcon, Target,
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, CartesianGrid,
   PieChart, Pie, Cell, ComposedChart, Line, ReferenceLine,
 } from "recharts";
 import { useTasksQuery } from "@/hooks/useTasks";
-import { useProjectsQuery } from "@/hooks/useProjects";
 import { useWeeklyReportQuery, useSaveWeeklyReport } from "@/hooks/useWeeklyReport";
 import {
   getWeekStartISO, weekBoundsFromISO, buildWeeklyAutofill, buildWeeklyMovement,
-  getWeekTasks, buildProjectWeekBreakdown, type ProjectWeekBreakdown,
+  getWeekTasks, buildProjectWeekBreakdown,
 } from "@/lib/weeklyReportMetrics";
-import { buildProjectKpis, buildSCurveWindow, tasksForProject, plannedDate } from "@/lib/projectMetrics";
-import { PROJECT_STATUS_LABEL, PROJECT_STATUS_COLOR, type ProjectStatus } from "@/types/project";
+import { buildSCurveWindow, plannedDate } from "@/lib/projectMetrics";
 import { addDays, toISODate } from "@/lib/calendar";
 import { StatusBadge, PriorityBadge } from "@/components/tasks/StatusBadge";
 import type { Task } from "@/types";
@@ -123,15 +120,6 @@ function ReportSection({ title, icon: Icon, accent, value, onChange, placeholder
   );
 }
 
-interface WeekProject {
-  name: string;
-  id?: string;
-  status: ProjectStatus;
-  kpis: ReturnType<typeof buildProjectKpis>;
-  movidas: number;
-  breakdown: ProjectWeekBreakdown;
-}
-
 function fmtPrazo(iso?: string): string {
   return iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}` : "";
 }
@@ -160,97 +148,13 @@ function TaskLink({ t, children, className = "" }: { t: Task; children: React.Re
   );
 }
 
-const CAP = 6;
-
-function ProjectBreakdownCard({ p, weekEndISO }: { p: WeekProject; weekEndISO: string }) {
-  const scc = PROJECT_STATUS_COLOR[p.status];
-  const more = (n: number) => (n > CAP ? <p className="text-[11px] text-surface-400 pl-0.5 pt-1">+{n - CAP} mais</p> : null);
-
-  return (
-    <div className="bg-white rounded-2xl border border-surface-200 shadow-sm overflow-hidden break-inside-avoid">
-      {/* header */}
-      <div className="px-5 py-3.5 border-b border-surface-100 flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <div className="w-8 h-8 rounded-lg bg-violet-500 flex items-center justify-center shrink-0">
-            <FolderKanban size={15} className="text-white" />
-          </div>
-          {p.id ? (
-            <Link href={`/projetos/${p.id}`} className="group inline-flex items-center gap-1 text-sm font-bold text-surface-800 hover:text-brand-700 truncate">
-              <span className="truncate">{p.name}</span>
-              <ArrowIcon size={14} className="text-surface-300 group-hover:text-brand-500 shrink-0" />
-            </Link>
-          ) : (
-            <h3 className="text-sm font-bold text-surface-800 truncate">{p.name}</h3>
-          )}
-          <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${scc.bg} ${scc.text}`}>
-            <span className={`w-1.5 h-1.5 rounded-full ${scc.dot}`} />
-            {PROJECT_STATUS_LABEL[p.status]}
-          </span>
-        </div>
-        <div className="flex items-center gap-3">
-          <span className="text-[11px] text-surface-400 whitespace-nowrap">{p.movidas} movim. · {p.kpis.total} tarefas</span>
-          <div className="flex items-center gap-2 w-36">
-            <div className="flex-1 h-2 bg-surface-100 rounded-full overflow-hidden">
-              <div className="h-full bg-gradient-to-r from-brand-500 to-brand-600 rounded-full" style={{ width: `${p.kpis.taxaConclusao}%` }} />
-            </div>
-            <span className="text-xs font-bold text-brand-600 tabular-nums w-9 text-right">{p.kpis.taxaConclusao}%</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Perguntas de sexta: avanços · foco · impeditivos */}
-      <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-surface-100">
-        <BreakdownColumn icon={CheckCircle2} label="Avanços" color="text-brand-600" count={p.breakdown.avancos.length}>
-          {p.breakdown.avancos.slice(0, CAP).map((t) => (
-            <TaskLink key={t.id} t={t}>
-              <span className="text-xs text-surface-700 group-hover:text-brand-700 leading-snug">{t.title}</span>
-            </TaskLink>
-          ))}
-          {more(p.breakdown.avancos.length)}
-        </BreakdownColumn>
-
-        <BreakdownColumn icon={Target} label="Foco desta semana" color="text-blue-600" count={p.breakdown.foco.length}>
-          {p.breakdown.foco.slice(0, CAP).map((t) => {
-            const pz = plannedDate(t);
-            const urgent = !!pz && pz <= weekEndISO;
-            return (
-              <TaskLink key={t.id} t={t} className={urgent ? "bg-brand-50/70 hover:bg-brand-50" : ""}>
-                <span className="min-w-0 flex-1 text-xs text-surface-700 group-hover:text-brand-700 leading-snug">{t.title}</span>
-                {pz && (
-                  <span className={`shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded ${urgent ? "bg-brand-600 text-white" : "bg-surface-100 text-surface-500"}`}>
-                    {fmtPrazo(pz)}
-                  </span>
-                )}
-              </TaskLink>
-            );
-          })}
-          {more(p.breakdown.foco.length)}
-        </BreakdownColumn>
-
-        <BreakdownColumn icon={AlertTriangle} label="Impeditivos" color="text-amber-600" count={p.breakdown.impeditivos.length}>
-          {p.breakdown.impeditivos.slice(0, CAP).map((t) => (
-            <TaskLink key={t.id} t={t}>
-              <span className="min-w-0">
-                <span className="block text-xs text-surface-700 group-hover:text-brand-700 leading-snug">{t.title}</span>
-                {t.impeditivo?.trim() && (
-                  <span className="block text-[11px] text-amber-600 leading-snug mt-0.5 line-clamp-2">{t.impeditivo.trim()}</span>
-                )}
-              </span>
-            </TaskLink>
-          ))}
-          {more(p.breakdown.impeditivos.length)}
-        </BreakdownColumn>
-      </div>
-    </div>
-  );
-}
+const CAP = 8;
 
 /* ---------------- Page ---------------- */
 
 export default function RelatorioSemanalClient({ userName }: Props) {
   const [weekStart, setWeekStart] = useState(() => getWeekStartISO());
   const { data: tasks = [], isLoading: tasksLoading } = useTasksQuery();
-  const { data: projects = [] } = useProjectsQuery();
   const reportQuery = useWeeklyReportQuery(weekStart);
   const save = useSaveWeeklyReport();
   const printRef = useRef<HTMLDivElement>(null);
@@ -316,23 +220,8 @@ export default function RelatorioSemanalClient({ userName }: Props) {
 
   const weekEndISO = useMemo(() => toISODate(weekBoundsFromISO(weekStart).end), [weekStart]);
 
-  const weekProjects = useMemo<WeekProject[]>(() => {
-    const names = new Set<string>();
-    for (const { task } of weekTasks) {
-      const n = task.projeto?.trim();
-      if (n) names.add(n);
-    }
-    return Array.from(names)
-      .map((name) => {
-        const proj = projects.find((p) => p.name === name);
-        const ptasks = tasksForProject(tasks, name);
-        const kpis = buildProjectKpis(ptasks);
-        const breakdown = buildProjectWeekBreakdown(ptasks, weekStart);
-        const movidas = weekTasks.filter(({ task }) => (task.projeto?.trim() || "") === name).length;
-        return { name, id: proj?.id, status: (proj?.status ?? "em_andamento") as ProjectStatus, kpis, movidas, breakdown };
-      })
-      .sort((a, b) => b.movidas - a.movidas);
-  }, [weekTasks, projects, tasks, weekStart]);
+  // Consolidado de TODOS os projetos: avanços, foco e impeditivos da semana.
+  const weekBreakdown = useMemo(() => buildProjectWeekBreakdown(tasks, weekStart), [tasks, weekStart]);
 
   const summary = useMemo(() => {
     const auto = buildWeeklyAutofill(tasks, weekStart);
@@ -554,23 +443,65 @@ export default function RelatorioSemanalClient({ userName }: Props) {
           <ReportSection title="Planejamento para a próxima" icon={CalendarClock} accent="bg-blue-500" value={planejamento} onChange={setPlanejamento} placeholder="Prioridades e tarefas previstas para a próxima semana…" />
         </div>
 
-        {/* Detalhamento por projeto (perguntas de sexta) */}
-        <div className="space-y-4">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-violet-500 flex items-center justify-center shrink-0">
-              <FolderKanban size={15} className="text-white" />
-            </div>
-            <h2 className="text-base font-bold text-surface-800">Detalhamento por projeto</h2>
-            <span className="ml-auto text-xs text-surface-400">{weekProjects.length} projeto(s)</span>
+        {/* Resumo consolidado (todos os projetos) — cabe em um print */}
+        <SectionCard
+          title="Avanços · Foco da semana · Impeditivos"
+          icon={FolderKanban}
+          accent="bg-violet-500"
+          right={<span className="text-[11px] text-surface-400">consolidado de todos os projetos</span>}
+          bodyClassName=""
+        >
+          <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-surface-100">
+            <BreakdownColumn icon={CheckCircle2} label="Principais avanços" color="text-brand-600" count={weekBreakdown.avancos.length}>
+              {weekBreakdown.avancos.slice(0, CAP).map((t) => (
+                <TaskLink key={t.id} t={t}>
+                  <span className="min-w-0 text-xs leading-snug">
+                    <span className="text-surface-700 group-hover:text-brand-700">{t.title}</span>
+                    {t.projeto && <span className="text-[10px] text-surface-400"> · {t.projeto}</span>}
+                  </span>
+                </TaskLink>
+              ))}
+              {weekBreakdown.avancos.length > CAP && <p className="text-[11px] text-surface-400 pl-0.5 pt-1">+{weekBreakdown.avancos.length - CAP} mais</p>}
+            </BreakdownColumn>
+
+            <BreakdownColumn icon={Target} label="Foco desta semana" color="text-blue-600" count={weekBreakdown.foco.length}>
+              {weekBreakdown.foco.slice(0, CAP).map((t) => {
+                const pz = plannedDate(t);
+                const urgent = !!pz && pz <= weekEndISO;
+                return (
+                  <TaskLink key={t.id} t={t} className={urgent ? "bg-brand-50/70 hover:bg-brand-50" : ""}>
+                    <span className="min-w-0 flex-1 text-xs leading-snug">
+                      <span className="text-surface-700 group-hover:text-brand-700">{t.title}</span>
+                      {t.projeto && <span className="text-[10px] text-surface-400"> · {t.projeto}</span>}
+                    </span>
+                    {pz && (
+                      <span className={`shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded ${urgent ? "bg-brand-600 text-white" : "bg-surface-100 text-surface-500"}`}>
+                        {fmtPrazo(pz)}
+                      </span>
+                    )}
+                  </TaskLink>
+                );
+              })}
+              {weekBreakdown.foco.length > CAP && <p className="text-[11px] text-surface-400 pl-0.5 pt-1">+{weekBreakdown.foco.length - CAP} mais</p>}
+            </BreakdownColumn>
+
+            <BreakdownColumn icon={AlertTriangle} label="Impeditivos" color="text-amber-600" count={weekBreakdown.impeditivos.length}>
+              {weekBreakdown.impeditivos.slice(0, CAP).map((t) => (
+                <TaskLink key={t.id} t={t}>
+                  <span className="min-w-0">
+                    <span className="block text-xs text-surface-700 group-hover:text-brand-700 leading-snug">
+                      {t.title}{t.projeto && <span className="text-[10px] text-surface-400"> · {t.projeto}</span>}
+                    </span>
+                    {t.impeditivo?.trim() && (
+                      <span className="block text-[11px] text-amber-600 leading-snug mt-0.5 line-clamp-2">{t.impeditivo.trim()}</span>
+                    )}
+                  </span>
+                </TaskLink>
+              ))}
+              {weekBreakdown.impeditivos.length > CAP && <p className="text-[11px] text-surface-400 pl-0.5 pt-1">+{weekBreakdown.impeditivos.length - CAP} mais</p>}
+            </BreakdownColumn>
           </div>
-          {weekProjects.length === 0 ? (
-            <div className="bg-white rounded-2xl border border-surface-200 shadow-sm p-6 text-center text-sm text-surface-400">
-              Nenhuma tarefa vinculada a projetos foi movimentada nesta semana.
-            </div>
-          ) : (
-            weekProjects.map((p) => <ProjectBreakdownCard key={p.name} p={p} weekEndISO={weekEndISO} />)
-          )}
-        </div>
+        </SectionCard>
 
         {/* Tarefas movimentadas — layout limpo (título · descrição · status · prioridade) */}
         <SectionCard
