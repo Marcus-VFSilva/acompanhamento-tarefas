@@ -28,7 +28,8 @@ export interface SCurvePoint {
   date: string;
   label: string;
   planejado: number;
-  realizado: number;
+  /** null para dias futuros (não há como ter realizado após hoje). */
+  realizado: number | null;
 }
 
 /**
@@ -86,19 +87,24 @@ export function buildSCurveWindow(tasks: Task[], start: Date, end: Date): SCurve
 
   if (plannedTimes.length === 0 && completedTimes.length === 0) return [];
 
+  const now = new Date();
+  const todayKey = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+
   const points: SCurvePoint[] = [];
   let cur = new Date(start.getFullYear(), start.getMonth(), start.getDate());
   const last = new Date(end.getFullYear(), end.getMonth(), end.getDate());
 
   while (cur.getTime() <= last.getTime()) {
     const dayEnd = new Date(cur.getFullYear(), cur.getMonth(), cur.getDate(), 23, 59, 59, 999).getTime();
+    const isFuture = cur.getTime() > todayKey;
     const plannedCount = plannedTimes.filter((x) => x <= dayEnd).length;
     const completedCount = completedTimes.filter((x) => x <= dayEnd).length;
     points.push({
       date: `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, "0")}-${String(cur.getDate()).padStart(2, "0")}`,
       label: cur.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" }),
       planejado: Math.round((plannedCount / total) * 100),
-      realizado: Math.round((completedCount / total) * 100),
+      // Realizado só existe até hoje; dias futuros ficam sem ponto.
+      realizado: isFuture ? null : Math.round((completedCount / total) * 100),
     });
     cur = addDays(cur, 1);
   }

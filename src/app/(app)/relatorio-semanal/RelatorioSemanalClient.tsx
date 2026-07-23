@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, CartesianGrid,
-  PieChart, Pie, Cell, ComposedChart, Line,
+  PieChart, Pie, Cell, ComposedChart, Line, ReferenceLine,
 } from "recharts";
 import { useTasksQuery } from "@/hooks/useTasks";
 import { useProjectsQuery } from "@/hooks/useProjects";
@@ -287,10 +287,15 @@ export default function RelatorioSemanalClient({ userName }: Props) {
 
   const movement = useMemo(() => buildWeeklyMovement(tasks, weekStart), [tasks, weekStart]);
   const generalSCurve = useMemo(() => {
-    const { start, end } = weekBoundsFromISO(weekStart);
-    // Janela: 15 dias antes da semana até 15 dias depois dela.
-    return buildSCurveWindow(tasks, addDays(start, -15), addDays(end, 15));
+    const { start } = weekBoundsFromISO(weekStart);
+    // Janela: 15 dias antes da semana até a sexta-feira da semana (seg + 4).
+    return buildSCurveWindow(tasks, addDays(start, -15), addDays(start, 4));
   }, [tasks, weekStart]);
+  // Rótulo do dia de hoje (para o marcador "Hoje" na curva), se estiver na janela.
+  const todayLabel = useMemo(() => {
+    const l = new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });
+    return generalSCurve.some((p) => p.label === l) ? l : null;
+  }, [generalSCurve]);
   const weekTasks = useMemo(() => getWeekTasks(tasks, weekStart), [tasks, weekStart]);
 
   const movTotals = useMemo(() => {
@@ -495,7 +500,7 @@ export default function RelatorioSemanalClient({ userName }: Props) {
           title="Curva em S — geral (todos os projetos e entregas)"
           icon={TrendingUp}
           accent="bg-brand-600"
-          right={<span className="text-[11px] text-surface-400">Planejado x realizado · últimos e próximos 15 dias</span>}
+          right={<span className="text-[11px] text-surface-400">Realizado até hoje · planejado até sexta da semana</span>}
           bodyClassName="p-4 pt-5"
         >
           {generalSCurve.length === 0 ? (
@@ -509,12 +514,20 @@ export default function RelatorioSemanalClient({ userName }: Props) {
                 <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#64748b" }} axisLine={false} tickLine={false} minTickGap={28} />
                 <YAxis tick={{ fontSize: 11, fill: "#94a3b8" }} domain={[0, 100]} tickFormatter={(v) => `${v}%`} axisLine={false} tickLine={false} width={34} />
                 <Tooltip
-                  formatter={(v, name) => [`${v}%`, name === "planejado" ? "Planejado" : "Realizado"]}
+                  formatter={(v, name) => [v == null ? "—" : `${v}%`, name === "planejado" ? "Planejado" : "Realizado"]}
                   contentStyle={{ borderRadius: 12, border: "1px solid #e2e8f0", fontSize: 12, boxShadow: "0 8px 24px rgba(15,23,42,0.08)" }}
                 />
                 <Legend iconType="plainline" iconSize={16} wrapperStyle={{ fontSize: 12, paddingTop: 8 }} formatter={(v) => (v === "planejado" ? "Planejado" : "Realizado")} />
-                <Line type="monotone" dataKey="planejado" stroke="#94a3b8" strokeWidth={2} strokeDasharray="5 4" dot={false} activeDot={{ r: 4 }} />
-                <Line type="monotone" dataKey="realizado" stroke="#044a42" strokeWidth={2.5} dot={false} activeDot={{ r: 5 }} />
+                {todayLabel && (
+                  <ReferenceLine
+                    x={todayLabel}
+                    stroke="#0f766e"
+                    strokeDasharray="3 3"
+                    label={{ value: "Hoje", position: "top", fontSize: 10, fill: "#0f766e" }}
+                  />
+                )}
+                <Line type="monotone" dataKey="planejado" stroke="#94a3b8" strokeWidth={2} strokeDasharray="5 4" dot={false} activeDot={{ r: 4 }} connectNulls={false} />
+                <Line type="monotone" dataKey="realizado" stroke="#044a42" strokeWidth={2.5} dot={false} activeDot={{ r: 5 }} connectNulls={false} />
               </ComposedChart>
             </ResponsiveContainer>
           )}
